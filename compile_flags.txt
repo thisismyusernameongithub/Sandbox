@@ -1,0 +1,9 @@
+-I/usr/include/c++/9.2.0
+-I/usr/include/c++/9.2.0/x86_64-pc-linux-gnu
+-I/usr/include/c++/9.2.0/backward
+-I/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include
+-I/usr/local/include
+-I/usr/lib/gcc/x86_64-pc-linux-gnu/9.2.0/include-fixed
+-I/usr/include
+-I/home/david/Documents/cpp/Sandbox
+-I/usr/include/SDL2
