@@ -1,23 +1,36 @@
-#Copyright Notice:
-#The files within this zip file are copyrighted by Lazy Foo' Productions (2004-2014)
-#and may not be redistributed without written permission.
 
-#OBJS specifies which files to compile as part of the project
-OBJS = main.cpp
+CFLAGS = -O3  -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable 
 
-#CC specifies which compiler we're using
-CC = g++
 
-#COMPILER_FLAGS specifies the additional compilation options we're using
-# -w suppresses all warnings
-COMPILER_FLAGS = -Wall -g -O3 -fexpensive-optimizations 
 
-#LINKER_FLAGS specifies the libraries we're linking against
-LINKER_FLAGS = -lSDL2 -lpthread -lX11 -lSDL2_ttf -lSDL2_image
 
-#OBJ_NAME specifies the name of our exectuable
-OBJ_NAME = build
+all: application.exe emscripten
 
-#This is the target that compiles our executable
-all : $(OBJS)
-	$(CC) $(OBJS) $(COMPILER_FLAGS) $(LINKER_FLAGS) -o $(OBJ_NAME)
+emscripten: build\application_em.o build\window_em.o build\simulation_em.o
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -sASSERTIONS -sSTACK_SIZE=1048576 --emrun -Wextra build\window_em.o build\simulation_em.o build\application_em.o -o application.js -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 --preload-file Resources -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 -pthread 
+
+build\application_em.o: src\application.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\application.c -o build\application_em.o -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread 
+
+build\window_em.o: src\window.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\window.c -o build\window_em.o -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread 
+
+build\simulation_em.o: src\simulation.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\simulation.c -o build\simulation_em.o -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread 
+
+application.exe: build\application.o build\window.o build\simulation.o
+	gcc $(CFLAGS) -o build\application.exe build\window.o build\simulation.o build\application.o -lgdi32 -lSDL2_ttf -lSDL2 -lm -lSDL2_image
+	build\application.exe
+
+build\application.o: src\application.c
+	gcc $(CFLAGS) -c src\application.c -o build\application.o
+
+build\window.o: src\window.c
+	gcc $(CFLAGS) -c src\window.c -o build\window.o
+
+build\simulation.o: src\simulation.c
+	gcc $(CFLAGS) -c src\simulation.c -o build\simulation.o
+
+
+clean: 
+	cmd //C del build\application.exe build\application.o build\simulation.o build\window.o build\application_em.o build\window_em.o build\simulation_em.o

@@ -1,0 +1,30 @@
+{
+    "terminal.integrated.env.windows": {
+        "PATH": "${env:PATH}"
+    },
+    
+    "files.associations": {
+        "stdio.h": "c",
+        "emscripten.h": "c",
+        "stdlib.h": "c",
+        "sdl_image.h": "c",
+        "string.h": "c",
+        "type_traits": "c",
+        "cmath": "c",
+        "compare": "c",
+        "limits": "c",
+        "new": "c",
+        "simulation.h": "c",
+        "css_profile.h": "c"
+    },
+    "cmake.configureOnOpen": true,
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "C:\\Users\\dwtys\\emscripten\\test",
+            "binaryPath": "C:\\Users\\dwtys\\emscripten\\test\\main.exe",
+            "binaryArgs": []
+        }
+    ],
+    "makefile.clearOutputBeforeBuild": false
+    
+}
