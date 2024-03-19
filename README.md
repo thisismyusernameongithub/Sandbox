@@ -55,3 +55,23 @@ GPU
 Xing Mei, Philippe Decaudin, Bao-Gang Hu
 <https://hal.inria.fr/file/index/docid/402079/filename/FastErosion_PG07.pdf>
 
+### launch.json
+
+Paste this in launch.json, this disables CORS as well as enables multithreading in wasm
+
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Chrome against localhost",
+            "url": "http://127.0.0.1:5500/index.html",
+            "webRoot": "${workspaceFolder}",
+            "runtimeArgs": ["--disable-web-security","--user-data-dir=c:\\chrome-browser", "--js-flags=--experimental-wasm-threads", "--enable-features=WebAssembly,SharedArrayBuffer"]
+        }
+    ]
+}

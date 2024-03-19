@@ -1,5 +1,5 @@
 
-CFLAGS = -O3  -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable 
+CFLAGS = -g3  -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable 
 
 
 
@@ -18,9 +18,11 @@ build\window_em.o: src\window.c
 build\simulation_em.o: src\simulation.c
 	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\simulation.c -o build\simulation_em.o -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread 
 
+run: application.exe
+	build\application.exe
+
 application.exe: build\application.o build\window.o build\simulation.o
 	gcc $(CFLAGS) -o build\application.exe build\window.o build\simulation.o build\application.o -lgdi32 -lSDL2_ttf -lSDL2 -lm -lSDL2_image
-	build\application.exe
 
 build\application.o: src\application.c
 	gcc $(CFLAGS) -c src\application.c -o build\application.o

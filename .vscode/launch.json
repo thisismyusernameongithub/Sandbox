@@ -3,5 +3,36 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": []
+    "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Disable CORS and enable wasm multithreads",
+            "url": "http://127.0.0.1:5500/index.html",
+            "webRoot": "${workspaceFolder}",
+            "runtimeArgs": ["--disable-web-security","--user-data-dir=c:\\chrome-browser", "--js-flags=--experimental-wasm-threads", "--enable-features=WebAssembly,SharedArrayBuffer"]
+        },    
+        {
+            "name": "g++.exe build and debug active file",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "C:/Users/dwtys/OneDrive/Dokument/programming/sandbox/Sandbox/build/application.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false, //set to true to see output in cmd instead
+            "MIMode": "gdb",
+            "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+            "setupCommands": [
+                {
+                "description": "Enable pretty-printing for gdb",
+                "text": "-enable-pretty-printing",
+                "ignoreFailures": true
+                }
+            ],
+            "preLaunchTask": "build"      
+        }
+      
+    ]
 }

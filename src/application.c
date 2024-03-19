@@ -1280,7 +1280,7 @@ static void generateColorMap()
 			//Add foam
 			if (map.foamLevel[x + mapPitch] > 0)
 			{
-				argb = lerpargb(argb, pallete.foam, minf(map.foamLevel[x + mapPitch] / 1000.f, 1.f));
+				argb = lerpargb(argb, pallete.foam, minf(map.foamLevel[x + mapPitch] / 10.f, 1.f));
 			}
 
 			//Add shadowmap if no lava because lava is emmisive
@@ -1298,6 +1298,7 @@ static void generateColorMap()
 
 
 	memcpy(map.argbBuffer, map.argb, sizeof(map.argb));
+	// memcpy(map.argbBlured, map.argbBuffer, sizeof(map.argb));
 	gaussBlurargb(map.argbBuffer, map.argbBlured, map.w*map.h, map.w, map.h, 10);
 	
 }
@@ -1327,7 +1328,7 @@ static void process(float dTime)
 			// map.foamLevel[x+y*map.w] += 0.1f*(map.waterVel[x+y*map.w].x*map.waterVel[x+y*map.w].x+map.waterVel[x+y*map.w].y*map.waterVel[x+y*map.w].y);
 
             map.foamLevel[x+y*w]  = minf(map.foamLevel[x+y*w], 1000.f);
-        	map.foamLevel[x+y*w] -= minf(map.foamLevel[x+y*w], 10.f);
+        	map.foamLevel[x+y*w] -= minf(map.foamLevel[x+y*w], 1.f * dTime);
 
 //- map.lava[x+y*w].depth/10.f
 			if(map.lava[x+y*w].depth > 0.f){
@@ -1510,7 +1511,8 @@ argb_t getTileColorMist(int x, int y, int ys, vec2f_t upVec){
 	// printf("%f %f %f %f %f\n",a.x, a.y, b.x, b.y, b.y-a.y);
 
 
-	argb = lerpargb(argb, pallete.mist, minf(d/100.f, 1.f));
+	argb = lerpargb(argb, pallete.mist, minf(d/50.f, 1.f));
+
 
 
     // argb.r = lerp(argb.r, pallete.white.r, mistDensity);
@@ -2071,7 +2073,7 @@ static void init()
 		}
 	}
 
-	   for(int y=0;y<map.h;y++){
+	for(int y=0;y<map.h;y++){
         for(int x=0;x<map.w;x++){
             map.height[x + y * map.w] = map.stone[x + y * map.w] + map.sand[x + y * map.w];
         }
@@ -2231,6 +2233,7 @@ int main()
 	window.size.w = windowSizeX;
 	window.size.h = windowSizeY;
 
+
 	window_init();
 
 	// init bottom layer
@@ -2262,9 +2265,13 @@ int main()
 			nameWidth = MAX(nameWidth, len);
 		}
 		
-		printf("┏━┫Profiling results┣━"); for(int i=0;i<nameWidth - 20;i++){ printf("━");} printf("┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┓\n");
-		printf("┃ Name "); for(int i=0;i<nameWidth - 5;i++){ printf(" ");}                 printf("┃ noCalls ┃   low   ┃   avg   ┃   high  ┃  total  ┃\n");
-		printf("┣━"); for(int i=0;i<nameWidth;i++){ printf("━");}                          printf("╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━┫\n");
+
+		printf("\n Total runtime: %f seconds \n", (double)window.time.ms1 / 1000.0);
+
+		printf("\n");
+		printf("┏━┫Profiling results┣━"); for(int i=0;i<nameWidth - 20;i++){ printf("━");}                       printf("┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓\n");
+		printf("┃ Name "); for(int i=0;i<nameWidth - 5;i++){ printf(" ");}                                       printf("┃ noCalls ┃   low   ┃   avg   ┃   high  ┃       total       ┃\n");
+		printf("┣━"); for(int i=0;i<nameWidth;i++){ printf("━");}                                                printf("╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┫\n");
 		for(int i=0;i<css_profile.numberOfProfiles;i++){
 			printf("┃ %s", css_profile.profiles[i].id); for(unsigned int j=0;j<nameWidth - strlen(css_profile.profiles[i].id);j++){ printf(" ");}
 			printf("│ %7d ", css_profile.profiles[i].numberOfCalls);
@@ -2272,9 +2279,11 @@ int main()
 			printf("│ %01.5f ", css_profile.profiles[i].avgTime);
 			printf("│ %01.5f ", css_profile.profiles[i].highTime);
 			printf("│ %07.3f ", css_profile.profiles[i].totalTime);
+			double percentage = css_profile.profiles[i].totalTime / ((double)window.time.ms1 / 100000.0);
+			printf("(%06.2f\%) ", percentage);
 			printf("┃ \n");
-			if(i == css_profile.numberOfProfiles - 1){ printf("┗━"); for(int i=0;i<nameWidth;i++){ printf("━");}                     printf("┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┛\n"); }
-			else{ printf("┠─"); for(int i=0;i<nameWidth;i++){ printf("─");}                     printf("┼─────────┼─────────┼─────────┼─────────┼─────────┨\n"); }
+			if(i == css_profile.numberOfProfiles - 1){ printf("┗━"); for(int i=0;i<nameWidth;i++){ printf("━");} printf("┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛\n"); }
+			else{ printf("┠─"); for(int i=0;i<nameWidth;i++){ printf("─");}                                      printf("┼─────────┼─────────┼─────────┼─────────┼───────────────────┨\n"); }
 			
 		}
 	#endif
