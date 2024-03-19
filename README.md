@@ -16,7 +16,7 @@
 - [ ] Get nicer colors for stuff.
 - [ ] Make the html look nicer.
 - [ ] Make sediment have color that gets transportet with the sediment.
-- [ ] Move drawPoint and drawLine into window.c
+- [x] Move drawPoint and drawLine into window.c
 - [ ] Split map into chunks, each chunk should keep track of what sort of fluids/sand it contains so it only need to update what is present.
 
 ## Done

@@ -2195,6 +2195,17 @@ static int mainLoop()
 			}
 		}
 	}
+
+	
+
+	drawSquare(topLayer, 200, 100, 100, 100, pallete.sand); //middle
+
+
+
+	argb_t result1 = argbAdd(pallete.sand, ARGB(255,24,53,53));
+
+	drawSquare(topLayer, 100, 100, 100, 100, pallete.green);
+	drawSquare(topLayer, 300, 100, 100, 100, pallete.blue);
 #endif
 
     
@@ -2280,7 +2291,7 @@ int main()
 			printf("│ %01.5f ", css_profile.profiles[i].highTime);
 			printf("│ %07.3f ", css_profile.profiles[i].totalTime);
 			double percentage = css_profile.profiles[i].totalTime / ((double)window.time.ms1 / 100000.0);
-			printf("(%06.2f\%) ", percentage);
+			printf("(%06.2f%%) ", percentage);
 			printf("┃ \n");
 			if(i == css_profile.numberOfProfiles - 1){ printf("┗━"); for(int i=0;i<nameWidth;i++){ printf("━");} printf("┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛\n"); }
 			else{ printf("┠─"); for(int i=0;i<nameWidth;i++){ printf("─");}                                      printf("┼─────────┼─────────┼─────────┼─────────┼───────────────────┨\n"); }

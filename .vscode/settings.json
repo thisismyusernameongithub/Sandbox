@@ -16,7 +16,9 @@
         "new": "c",
         "simulation.h": "c",
         "css_profile.h": "c",
-        "system_error": "c"
+        "system_error": "c",
+        "sdl.h": "c",
+        "sdl_syswm.h": "c"
     },
     "cmake.configureOnOpen": true,
     "makefile.launchConfigurations": [

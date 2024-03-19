@@ -103,6 +103,7 @@ static struct
 } textureStorage;
 
 static float clampf(float value, float min, float max);
+static int clampi(int value, int min, int max);
 static void windowResized(void);
 static void updateTime(void);
 static sdlTexture createSDLTexture(int width, int height);
@@ -961,6 +962,21 @@ void drawPoint(Layer layer, int x, int y, argb_t color){
 	layer.frameBuffer[x+y*layer.w] = color;
 }
 
+void drawSquare(Layer layer, int x, int y, int w, int h, argb_t color){
+	
+	int xStart = clampi(x, 0, layer.w);
+	int yStart = clampi(y, 0, layer.h);
+	int xEnd = clampi(x + w, 0, layer.w);
+	int yEnd = clampi(y + h, 0, layer.h);
+
+	for(int Y = yStart; Y < yEnd; Y++){
+		for(int X = xStart; X < xEnd; X++){
+			layer.frameBuffer[X+Y*layer.w] = color;
+		}
+	}
+
+}
+
 void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t color){
 	int outOfBounds = 0; //If both point are outside bounds we return from this funciton before drawing anything
 	if(xStart >= layer.w || xStart < 0 || yStart >= layer.h || yStart < 0){
@@ -1007,4 +1023,14 @@ void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t co
 static float clampf(float value, float min, float max) {
     const float t = value < min ? min : value;
     return t > max ? max : t;
+}
+
+
+static int clampi(int value, int min, int max) {
+    const int t = value < min ? min : value;
+    return t > max ? max : t;
+}
+
+argb_t argbAdd(argb_t color1, argb_t color2){
+	
 }

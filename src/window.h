@@ -171,8 +171,10 @@ void gaussBlurargb(argb_t *source, argb_t *target, int source_lenght, int w, int
 vec2f_t normalizeVec2f(vec2f_t vector);
 
 void drawPoint(Layer layer, int x, int y, argb_t color);
-
+void drawSquare(Layer layer, int x, int y, int w, int h, argb_t color);
 void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t color);
+
+argb_t argbAdd(argb_t color1, argb_t color2);
 
 #endif /* WINDOW_H_ */
 
