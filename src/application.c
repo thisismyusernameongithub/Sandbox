@@ -989,6 +989,7 @@ static void updateInput(){
 	}
 	if (key.L == eKEY_PRESSED){
 		NEWFEATURE = (NEWFEATURE) ? 0 : 1;
+		printf("NEWFATURE %s\n", NEWFEATURE ? "ON" : "OFF");
 	}
 }
 
@@ -2226,15 +2227,21 @@ static int mainLoop()
 	// gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);
 	// PROFILE(gaussBlurargb(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
 	// PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
-
-	PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
-	PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+	// if(!NEWFEATURE){
+		PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+	// }else{
+		PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+	// }
 
     // ┃ gaussBlurargb(&botLa... │      30 │ 0.02620 │ 0.03369 │ 0.04468 │ 001.011 (023.70%) ┃ 
 	// ┠─────────────────────────┼─────────┼─────────┼─────────┼─────────┼───────────────────┨
 	// ┃ gaussBlurargb2(&botL... │      30 │ 0.02662 │ 0.03383 │ 0.04392 │ 001.015 (023.80%) ┃ 
 	// ┗━━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛
-
+	// ┠─────────────────────────┼─────────┼─────────┼─────────┼─────────┼───────────────────┨
+	// ┃ gaussBlurargb(botLay... │      16 │ 0.30330 │ 0.33900 │ 0.45386 │ 005.424 (049.43%) ┃ 
+	// ┠─────────────────────────┼─────────┼─────────┼─────────┼─────────┼───────────────────┨
+	// ┃ gaussBlurargb2(botLa... │      16 │ 0.22572 │ 0.25419 │ 0.40468 │ 004.067 (037.06%) ┃ 
+	// ┗━━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛
 	return window_run();
 }
 
