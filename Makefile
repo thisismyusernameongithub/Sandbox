@@ -1,5 +1,5 @@
 
-CFLAGS = -O3  -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -mavx2
+CFLAGS = -g3  -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -mavx2
 
 
 

@@ -91,10 +91,10 @@ struct{
 #define MAPW 256
 #define MAPH 256
 
-#define windowSizeX 800
-#define windowSizeY 800
-#define rendererSizeX 600
-#define rendererSizeY 600
+#define windowSizeX 1024	
+#define windowSizeY 1024
+#define rendererSizeX 1024
+#define rendererSizeY 1024
 
 static inline int maxi(const int a, const int b){
     return (a > b) ? a : b;
@@ -2030,11 +2030,16 @@ static void init()
 	// Create background for render
 	for (int x = 0; x < window.drawSize.w; x++)
 	{
-		argb_t argb = (argb_t){.b = ((219 + x) >> 2), .g = (((182 + x) >> 2)), .r = (((92 + x) >> 2))};
+		// argb_t argb = (argb_t){.b = ((219 + x) >> 2), .g = (((182 + x) >> 2)), .r = (((92 + x) >> 2))};
+		argb_t argb = lerpargb(ARGB(255,222,245,254),ARGB(255,25,47,56),((float)x)/((float)window.drawSize.w)); //Gradient over rendersize
 		for (int y = 0; y < window.drawSize.h; y++)
 		{
 
-			background[window.drawSize.w - 1 - x + y * window.drawSize.w] = argb;
+			if((x & 0x80) ^ (y & 0x80)){
+				background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.water;
+			}else{
+				background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.sand;
+			}
 		}
 	}
 
@@ -2218,10 +2223,17 @@ static int mainLoop()
 
 	
 
-	PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
+	// gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);
+	// PROFILE(gaussBlurargb(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
+	// PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
 
-	PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
-    
+	PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+	PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+
+    // ┃ gaussBlurargb(&botLa... │      30 │ 0.02620 │ 0.03369 │ 0.04468 │ 001.011 (023.70%) ┃ 
+	// ┠─────────────────────────┼─────────┼─────────┼─────────┼─────────┼───────────────────┨
+	// ┃ gaussBlurargb2(&botL... │      30 │ 0.02662 │ 0.03383 │ 0.04392 │ 001.015 (023.80%) ┃ 
+	// ┗━━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛
 
 	return window_run();
 }
@@ -2272,6 +2284,8 @@ int main()
 	// if(pthread_create(&render_pthread, NULL, testThread, NULL)) printf("Error creating thread\n");
 	// if(pthread_create(&render_pthread2, NULL, testThread2, NULL)) printf("Error creating thread\n");
 
+testFunc();
+
 #ifdef __EMSCRIPTEN__
 	emscripten_set_main_loop((void (*)(void))mainLoop, 0, 1);
 #else
@@ -2289,6 +2303,7 @@ int main()
 			nameWidth = MAX(nameWidth, len);
 		}
 		
+
 
 		printf("\n Total runtime: %f seconds \n", (double)window.time.ms1 / 1000.0);
 
