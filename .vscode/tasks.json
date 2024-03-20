@@ -52,7 +52,7 @@
         {
             "type": "shell",
             "label": "build",
-            "command": "make",
+            "command": "make application.exe",
             "args": [
                 
             ],

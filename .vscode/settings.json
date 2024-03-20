@@ -18,7 +18,9 @@
         "css_profile.h": "c",
         "system_error": "c",
         "sdl.h": "c",
-        "sdl_syswm.h": "c"
+        "sdl_syswm.h": "c",
+        "immintrin.h": "c",
+        "x86gprintrin.h": "c"
     },
     "cmake.configureOnOpen": true,
     "makefile.launchConfigurations": [

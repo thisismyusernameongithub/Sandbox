@@ -2082,6 +2082,9 @@ static void init()
 
 }
 
+argb_t testImage1[256*256];
+argb_t testImage2[256*256];
+
 static int mainLoop()
 {
 
@@ -2198,16 +2201,26 @@ static int mainLoop()
 
 	
 
-	drawSquare(topLayer, 200, 100, 100, 100, pallete.sand); //middle
+	// drawSquare(topLayer, 200, 100, 100, 100, pallete.sand); //middle
 
+	// argb_t result1;
 
+	// PROFILE(result1 = argbAdd1(pallete.sand, ARGB(255,24,53,53));)
 
-	argb_t result1 = argbAdd(pallete.sand, ARGB(255,24,53,53));
+	// drawSquare(topLayer, 100, 100, 100, 100, result1);
+	
+	// argb_t result2;
 
-	drawSquare(topLayer, 100, 100, 100, 100, pallete.green);
-	drawSquare(topLayer, 300, 100, 100, 100, pallete.blue);
+	// PROFILE(result2 = argbAdd2(pallete.sand, ARGB(255,24,53,53));)
+
+	// drawSquare(topLayer, 300, 100, 100, 100, result2);
 #endif
 
+	
+
+	PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
+
+	PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
     
 
 	return window_run();
@@ -2283,7 +2296,7 @@ int main()
 		printf("┏━┫Profiling results┣━"); for(int i=0;i<nameWidth - 20;i++){ printf("━");}                       printf("┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓\n");
 		printf("┃ Name "); for(int i=0;i<nameWidth - 5;i++){ printf(" ");}                                       printf("┃ noCalls ┃   low   ┃   avg   ┃   high  ┃       total       ┃\n");
 		printf("┣━"); for(int i=0;i<nameWidth;i++){ printf("━");}                                                printf("╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┫\n");
-		for(int i=0;i<css_profile.numberOfProfiles;i++){
+		for(int i=0;i<=css_profile.numberOfProfiles;i++){
 			printf("┃ %s", css_profile.profiles[i].id); for(unsigned int j=0;j<nameWidth - strlen(css_profile.profiles[i].id);j++){ printf(" ");}
 			printf("│ %7d ", css_profile.profiles[i].numberOfCalls);
 			printf("│ %01.5f ", css_profile.profiles[i].lowTime);
@@ -2293,12 +2306,14 @@ int main()
 			double percentage = css_profile.profiles[i].totalTime / ((double)window.time.ms1 / 100000.0);
 			printf("(%06.2f%%) ", percentage);
 			printf("┃ \n");
-			if(i == css_profile.numberOfProfiles - 1){ printf("┗━"); for(int i=0;i<nameWidth;i++){ printf("━");} printf("┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛\n"); }
+			if(i == css_profile.numberOfProfiles){ printf("┗━"); for(int i=0;i<nameWidth;i++){ printf("━");} printf("┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛\n"); }
 			else{ printf("┠─"); for(int i=0;i<nameWidth;i++){ printf("─");}                                      printf("┼─────────┼─────────┼─────────┼─────────┼───────────────────┨\n"); }
 			
 		}
 	#endif
 #endif /*DEBUG*/
+
+
 
 	return 0;
 }

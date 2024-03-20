@@ -139,7 +139,7 @@ typedef struct{
 	};
 }argb_t;
 
-#define ARGB(A,R,G,B) (argb_t){.a=A,.r=R,.g=G,.b=B}
+#define ARGB(A,R,G,B) (argb_t){.a=(A),.r=(R),.g=(G),.b=(B)}
 
 typedef struct{
 	argb_t * frameBuffer;
@@ -167,6 +167,7 @@ double getWindowTime(void);
 
 void gaussBlurf(float *source, float *target, int source_lenght, int w, int h, int r);
 void gaussBlurargb(argb_t *source, argb_t *target, int source_lenght, int w, int h, int r);
+void gaussBlurargb2(argb_t *source, argb_t *target, int source_lenght, int w, int h, int r);
 
 vec2f_t normalizeVec2f(vec2f_t vector);
 
@@ -174,7 +175,8 @@ void drawPoint(Layer layer, int x, int y, argb_t color);
 void drawSquare(Layer layer, int x, int y, int w, int h, argb_t color);
 void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t color);
 
-argb_t argbAdd(argb_t color1, argb_t color2);
+argb_t argbAdd1(argb_t color1, argb_t color2);
+argb_t argbAdd2(argb_t color1, argb_t color2);
 
 #endif /* WINDOW_H_ */
 

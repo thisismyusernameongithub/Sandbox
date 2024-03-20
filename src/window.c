@@ -944,6 +944,7 @@ void gaussBlurargb(argb_t *source, argb_t *target,int source_lenght, int w, int 
 }
 
 
+
 //Normalize given vector
 inline vec2f_t normalizeVec2f(vec2f_t vector){
 	float length = sqrtf(vector.x * vector.x + vector.y * vector.y);
@@ -1030,7 +1031,176 @@ static int clampi(int value, int min, int max) {
     const int t = value < min ? min : value;
     return t > max ? max : t;
 }
+#include <immintrin.h>
+argb_t argbAdd1(argb_t color1, argb_t color2){
+	argb_t result_color;
+	for(int i=0;i<10000;i++){
+		result_color = ARGB(color1.a+color2.a, color1.r+color2.r, color1.g+color2.g, color1.b+color2.b);
+	}
+	return result_color;
+}
 
-argb_t argbAdd(argb_t color1, argb_t color2){
-	
+argb_t argbAdd2(argb_t color1, argb_t color2){
+    argb_t result_color;
+	for(int i=0;i<10000;i++){
+    
+	// Load colors into 128-bit vectors
+    __m128i color1_vec = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, color1.a, color1.r, color1.g, color1.b);
+    __m128i color2_vec = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, color2.a, color2.r, color2.g, color2.b);
+
+    // Add the vectors element-wise
+    __m128i result_vec = _mm_add_epi8(color1_vec, color2_vec);
+
+    // Store the result back into a color struct
+    result_color.b = _mm_extract_epi8(result_vec, 0);
+    result_color.g = _mm_extract_epi8(result_vec, 1);
+    result_color.r = _mm_extract_epi8(result_vec, 2);
+    result_color.a = _mm_extract_epi8(result_vec, 3);
+	}
+    return result_color;
+}
+
+
+static void boxBlurTargb2(const argb_t *source, argb_t *target,int w, int h, int r){
+    float iarr = 1 / (float)(r+r+1);
+    for(int i=0; i<w; i++){
+        int ti = i;
+		int li = ti;
+		int ri = ti+r*w;
+        float fv_r = source[ti].r;
+        float fv_g = source[ti].g;
+        float fv_b = source[ti].b;
+		float lv_r = source[ti+w*(h-1)].r;
+		float lv_g = source[ti+w*(h-1)].g;
+		float lv_b = source[ti+w*(h-1)].b;
+		float val_r = (float)(r+1)*fv_r;
+		float val_g = (float)(r+1)*fv_g;
+		float val_b = (float)(r+1)*fv_b;
+        for(int j=0; j<r; j++){
+			val_r += source[ti+j*w].r;
+			val_g += source[ti+j*w].g;
+			val_b += source[ti+j*w].b;
+		} 
+        for(int j=0  ; j<=r ; j++){
+			val_r += source[ri].r - fv_r;
+			val_g += source[ri].g - fv_g;
+			val_b += source[ri].b - fv_b;
+			target[ti].r = roundf(val_r*iarr);  
+			target[ti].g = roundf(val_g*iarr);  
+			target[ti].b = roundf(val_b*iarr);  
+			ri += w; 
+			ti += w; 
+		}
+        for(int j=r+1; j<h-r; j++){
+			val_r += source[ri].r - source[li].r;  
+			val_g += source[ri].g - source[li].g;  
+			val_b += source[ri].b - source[li].b;  
+			target[ti].r = roundf(val_r*iarr);  
+			target[ti].g = roundf(val_g*iarr);  
+			target[ti].b = roundf(val_b*iarr);  
+			li += w; 
+			ri += w; 
+			ti += w; 
+		}
+        for(int j=h-r; j<h  ; j++){ 
+			val_r += lv_r - source[li].r;  
+			val_g += lv_g - source[li].g;  
+			val_b += lv_b - source[li].b;  
+			target[ti].r = roundf(val_r*iarr);  
+			target[ti].g = roundf(val_g*iarr);  
+			target[ti].b = roundf(val_b*iarr);  
+			li += w; 
+			ti += w; 
+		}
+    }
+}
+
+
+static void boxBlurHargb2(const argb_t *source, argb_t *target,int w, int h, int r){
+    float iarr = 1 / (float)(r+r+1);
+    for(int i=0; i<h; i++) {
+        int ti = i*w;
+		int li = ti;
+		int ri = ti+r;
+        float fv_r = source[ti].r;
+        float fv_g = source[ti].g;
+        float fv_b = source[ti].b;
+		float lv_r = source[ti+w-1].r;
+		float lv_g = source[ti+w-1].g;
+		float lv_b = source[ti+w-1].b;
+		float val_r = (float)(r+1)*fv_r;
+		float val_g = (float)(r+1)*fv_g;
+		float val_b = (float)(r+1)*fv_b;
+        for(int j=0; j<r; j++){
+			val_r += source[ti+j].r;
+			val_g += source[ti+j].g;
+			val_b += source[ti+j].b;
+		}
+        for(int j=0  ; j<=r ; j++){
+			val_r += source[ri].r - fv_r;
+			val_g += source[ri].g - fv_g;
+			val_b += source[ri].b - fv_b;
+			target[ti].r = roundf(val_r*iarr); 
+			target[ti].g = roundf(val_g*iarr); 
+			target[ti].b = roundf(val_b*iarr); 
+			ri++;
+			ti++;
+		}
+        for(int j=r+1; j<w-r; j++){
+			val_r += source[ri].r - source[li].r;   
+			val_g += source[ri].g - source[li].g;   
+			val_b += source[ri].b - source[li].b;   
+			target[ti].r = roundf(val_r*iarr); 
+			target[ti].g = roundf(val_g*iarr); 
+			target[ti].b = roundf(val_b*iarr); 
+			ri++;
+			li++;
+			ti++;
+		}
+        for(int j=w-r; j<w  ; j++){
+			val_r += lv_r - source[li].r;
+			val_g += lv_g - source[li].g;
+			val_b += lv_b - source[li].b;
+			target[ti].r = roundf(val_r*iarr); 
+			target[ti].g = roundf(val_g*iarr); 
+			target[ti].b = roundf(val_b*iarr); 
+			li++;
+			ti++;
+		}
+    }
+}
+
+
+static void boxBlurargb2(argb_t *source, argb_t *target,int source_lenght, int w, int h, int r) {
+    for(int i=0; i<source_lenght; i++){
+		target[i] = source[i];
+	} 
+    boxBlurHargb2(target, source, w, h, r);
+    boxBlurTargb2(source, target, w, h, r);
+}
+
+void gaussBlurargb2(argb_t *source, argb_t *target,int source_lenght, int w, int h, int r) {
+    int n = 3;
+    float bxs[n];
+    float wIdeal = sqrtf((12*r*r/n)+1);  // Ideal averaging filter width
+    int wl = (int)floorf(wIdeal);  
+	if(wl%2==0){ 
+		wl--;
+	}
+    int wu = wl+2;
+
+    float mIdeal = (float)(12*r*r - n*wl*wl - 4*n*wl - 3*n)/(float)(-4*wl - 4);
+    int m = roundf(mIdeal);
+    // var sigmaActual = std::sqrt( (m*wl*wl + (n-m)*wu*wu - n)/12 );
+
+    for(int i=0; i<n;i++){
+        if(i<m){
+			bxs[i] = (float)wl;
+		}else{
+			bxs[i] = (float)wu;
+		}
+    }
+    boxBlurargb(source, target, source_lenght, w, h, (int)((bxs[0]-1)/2.f));
+    boxBlurargb(target, source, source_lenght, w, h, (int)((bxs[1]-1)/2.f));
+    boxBlurargb(source, target, source_lenght, w, h, (int)((bxs[2]-1)/2.f));
 }
