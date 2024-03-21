@@ -1060,7 +1060,7 @@ argb_t argbAdd2(argb_t color1, argb_t color2){
     return result_color;
 }
 
-void testFunc(){
+void testFunc(void){
 
 	__m128 val = _mm_set_ps(1.f, 2.f, 3.f, 4.f);
 	float val3;
@@ -1099,15 +1099,15 @@ void testFunc(){
 
 static void boxBlurTargb2(const argb_t *source, argb_t *target,int w, int h, int r){
     float iarr = 1 / (float)(r+r+1);
-	__m128 iarr_vec  = _mm_set_ps(iarr, iarr, iarr, iarr); //new
-    for(int i=0; i<w; i++){
+	__m256 iarr_vec  = _mm256_set_ps(iarr, iarr, iarr, iarr, iarr, iarr, iarr, iarr); //new
+    for(int i = 0; i < w-2; i += 2){
         int ti = i;
 		int li = ti;
 		int ri = ti+r*w;
 		
-		__m128 fv  = _mm_set_ps(source[ti].a, source[ti].r, source[ti].g, source[ti].b);
-		__m128 lv  = _mm_set_ps(source[ti+w*(h-1)].a, source[ti+w*(h-1)].r, source[ti+w*(h-1)].g, source[ti+w*(h-1)].b);
-		__m128 val = _mm_set_ps((float)(r+1)*source[ti].a, (float)(r+1)*source[ti].r, (float)(r+1)*source[ti].g, (float)(r+1)*source[ti].b);
+		__m256 fv  = _mm256_set_ps(source[ti].a, source[ti].r, source[ti].g, source[ti].b, source[(ti+1)].a, source[(ti+1)].r, source[(ti+1)].g, source[(ti+1)].b);
+		__m256 lv  = _mm256_set_ps(source[ti+w*(h-1)].a, source[ti+w*(h-1)].r, source[ti+w*(h-1)].g, source[ti+w*(h-1)].b, source[(ti+1)+w*(h-1)].a, source[(ti+1)+w*(h-1)].r, source[(ti+1)+w*(h-1)].g, source[(ti+1)+w*(h-1)].b);
+		__m256 val = _mm256_set_ps((float)(r+1)*source[ti].a, (float)(r+1)*source[ti].r, (float)(r+1)*source[ti].g, (float)(r+1)*source[ti].b, (float)(r+1)*source[(ti+1)].a, (float)(r+1)*source[(ti+1)].r, (float)(r+1)*source[(ti+1)].g, (float)(r+1)*source[(ti+1)].b);
 
 
         // float fv_r = source[ti].r;
@@ -1120,8 +1120,8 @@ static void boxBlurTargb2(const argb_t *source, argb_t *target,int w, int h, int
 		// float val_g = (float)(r+1)*source[ti].g;
 		// float val_b = (float)(r+1)*source[ti].b;
         for(int j=0; j<r; j++){
-			__m128 addend = _mm_set_ps(source[ti+j*w].a, source[ti+j*w].r, source[ti+j*w].g, source[ti+j*w].b);
-			val = _mm_add_ps(val, addend);
+			__m256 addend = _mm256_set_ps(source[ti+j*w].a, source[ti+j*w].r, source[ti+j*w].g, source[ti+j*w].b, source[(ti+1)+j*w].a, source[(ti+1)+j*w].r, source[(ti+1)+j*w].g, source[(ti+1)+j*w].b);
+			val = _mm256_add_ps(val, addend);
 			// val_r += source[ti+j*w].r;
 			// val_g += source[ti+j*w].g;
 			// val_b += source[ti+j*w].b;
@@ -1132,22 +1132,25 @@ static void boxBlurTargb2(const argb_t *source, argb_t *target,int w, int h, int
 		// _MM_EXTRACT_FLOAT(val_b, val, 0);
 		
         for(int j=0  ; j<=r ; j++){
-			__m128 addend = _mm_set_ps(source[ri].a, source[ri].r, source[ri].g, source[ri].b);
-			addend = _mm_sub_ps(addend, fv);
-			val = _mm_add_ps(val, addend);
+			__m256 addend = _mm256_set_ps(source[ri].a, source[ri].r, source[ri].g, source[ri].b, source[(ri+1)].a, source[(ri+1)].r, source[(ri+1)].g, source[(ri+1)].b);
+			addend = _mm256_sub_ps(addend, fv);
+			val = _mm256_add_ps(val, addend);
 			
-			__m128 product =_mm_mul_ps(val, iarr_vec);
-			product = _mm_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+			__m256 product =_mm256_mul_ps(val, iarr_vec);
+			product = _mm256_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
 
 			// Convert the floats to 32-bit packed integers with rounding
-			__m128i intVec = _mm_cvtps_epi32(product);
+			__m256i intVec = _mm256_cvtps_epi32(product);
 
 			// Extract each 32-bit integer, mask to get the lower 8 bits, and store in the structure
-			target[ti].a = (_mm_extract_epi32(intVec, 3)) & 0xFF;
-			target[ti].r = (_mm_extract_epi32(intVec, 2)) & 0xFF;
-			target[ti].g = (_mm_extract_epi32(intVec, 1)) & 0xFF;
-			target[ti].b = (_mm_extract_epi32(intVec, 0)) & 0xFF;
-
+			target[ti].a = (_mm256_extract_epi32(intVec, 7)) & 0xFF;
+			target[ti].r = (_mm256_extract_epi32(intVec, 6)) & 0xFF;
+			target[ti].g = (_mm256_extract_epi32(intVec, 5)) & 0xFF;
+			target[ti].b = (_mm256_extract_epi32(intVec, 4)) & 0xFF;
+			target[(ti+1)].a = (_mm256_extract_epi32(intVec, 3)) & 0xFF;
+			target[(ti+1)].r = (_mm256_extract_epi32(intVec, 2)) & 0xFF;
+			target[(ti+1)].g = (_mm256_extract_epi32(intVec, 1)) & 0xFF;
+			target[(ti+1)].b = (_mm256_extract_epi32(intVec, 0)) & 0xFF;
 
 			// val_r += source[ri].r - fv_r;
 			// val_g += source[ri].g - fv_g;
@@ -1162,23 +1165,26 @@ static void boxBlurTargb2(const argb_t *source, argb_t *target,int w, int h, int
 
 		
         for(int j=r+1; j<h-r; j++){
-			__m128 riVec = _mm_set_ps(source[ri].a, source[ri].r, source[ri].g, source[ri].b);
-			__m128 liVec = _mm_set_ps(source[ri].a, source[li].r, source[li].g, source[li].b);
-			__m128 diffVec = _mm_sub_ps(riVec, liVec);
-			val = _mm_add_ps(val, diffVec);
+			__m256 riVec = _mm256_set_ps(source[ri].a, source[ri].r, source[ri].g, source[ri].b, source[(ri+1)].a, source[(ri+1)].r, source[(ri+1)].g, source[(ri+1)].b);
+			__m256 liVec = _mm256_set_ps(source[li].a, source[li].r, source[li].g, source[li].b, source[(li+1)].a, source[(li+1)].r, source[(li+1)].g, source[(li+1)].b);
+			__m256 diffVec = _mm256_sub_ps(riVec, liVec);
+			val = _mm256_add_ps(val, diffVec);
 
-			__m128 product =_mm_mul_ps(val, iarr_vec);
-			product = _mm_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+			__m256 product =_mm256_mul_ps(val, iarr_vec);
+			product = _mm256_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
 
 			// Convert the floats to 32-bit packed integers with rounding
-			__m128i intVec = _mm_cvtps_epi32(product);
+			__m256i intVec = _mm256_cvtps_epi32(product);
 
 			// Extract each 32-bit integer, mask to get the lower 8 bits, and store in the structure
-			target[ti].a = (_mm_extract_epi32(intVec, 3)) & 0xFF;
-			target[ti].r = (_mm_extract_epi32(intVec, 2)) & 0xFF;
-			target[ti].g = (_mm_extract_epi32(intVec, 1)) & 0xFF;
-			target[ti].b = (_mm_extract_epi32(intVec, 0)) & 0xFF;
-
+			target[ti].a = (_mm256_extract_epi32(intVec, 7)) & 0xFF;
+			target[ti].r = (_mm256_extract_epi32(intVec, 6)) & 0xFF;
+			target[ti].g = (_mm256_extract_epi32(intVec, 5)) & 0xFF;
+			target[ti].b = (_mm256_extract_epi32(intVec, 4)) & 0xFF;
+			target[(ti+1)].a = (_mm256_extract_epi32(intVec, 3)) & 0xFF;
+			target[(ti+1)].r = (_mm256_extract_epi32(intVec, 2)) & 0xFF;
+			target[(ti+1)].g = (_mm256_extract_epi32(intVec, 1)) & 0xFF;
+			target[(ti+1)].b = (_mm256_extract_epi32(intVec, 0)) & 0xFF;
 			// val_r += source[ri].r - source[li].r;  
 			// val_g += source[ri].g - source[li].g;  
 			// val_b += source[ri].b - source[li].b;  
@@ -1192,22 +1198,25 @@ static void boxBlurTargb2(const argb_t *source, argb_t *target,int w, int h, int
 		}
 
         for(int j=h-r; j<h  ; j++){ 
-			__m128 addend = _mm_set_ps(source[li].a, source[li].r, source[li].g, source[li].b);
-			addend = _mm_sub_ps(lv, addend);
-			val = _mm_add_ps(val, addend);
+			__m256 addend = _mm256_set_ps(source[li].a, source[li].r, source[li].g, source[li].b, source[(li+1)].a, source[(li+1)].r, source[(li+1)].g, source[(li+1)].b);
+			addend = _mm256_sub_ps(lv, addend);
+			val = _mm256_add_ps(val, addend);
 			
-			__m128 product =_mm_mul_ps(val, iarr_vec);
-			product = _mm_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+			__m256 product =_mm256_mul_ps(val, iarr_vec);
+			product = _mm256_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
 
 			// Convert the floats to 32-bit packed integers with rounding
-			__m128i intVec = _mm_cvtps_epi32(product);
+			__m256i intVec = _mm256_cvtps_epi32(product);
 
 			// Extract each 32-bit integer, mask to get the lower 8 bits, and store in the structure
-			target[ti].a = (_mm_extract_epi32(intVec, 3)) & 0xFF;
-			target[ti].r = (_mm_extract_epi32(intVec, 2)) & 0xFF;
-			target[ti].g = (_mm_extract_epi32(intVec, 1)) & 0xFF;
-			target[ti].b = (_mm_extract_epi32(intVec, 0)) & 0xFF;
-
+			target[ti].a = (_mm256_extract_epi32(intVec, 7)) & 0xFF;
+			target[ti].r = (_mm256_extract_epi32(intVec, 6)) & 0xFF;
+			target[ti].g = (_mm256_extract_epi32(intVec, 5)) & 0xFF;
+			target[ti].b = (_mm256_extract_epi32(intVec, 4)) & 0xFF;
+			target[(ti+1)].a = (_mm256_extract_epi32(intVec, 3)) & 0xFF;
+			target[(ti+1)].r = (_mm256_extract_epi32(intVec, 2)) & 0xFF;
+			target[(ti+1)].g = (_mm256_extract_epi32(intVec, 1)) & 0xFF;
+			target[(ti+1)].b = (_mm256_extract_epi32(intVec, 0)) & 0xFF;
 
 			// val_r += lv_r - source[li].r;  
 			// val_g += lv_g - source[li].g;  
@@ -1220,6 +1229,109 @@ static void boxBlurTargb2(const argb_t *source, argb_t *target,int w, int h, int
 		}
     }
 }
+
+static void boxBlurTargb3(const argb_t *source, argb_t *target,int w, int h, int r){
+    float iarr = 1 / (float)(r+r+1);
+	__m256 iarr_vec  = _mm256_set1_ps(iarr); // Load iarr into all elements of the vector
+    for(int i = 0; i < w-2; i += 2){
+        int ti = i;
+		int li = ti;
+		int ri = ti+r*w;
+		
+		__m256 fv  = _mm256_set_ps(source[ti].a, source[ti].r, source[ti].g, source[ti].b, source[(ti+1)].a, source[(ti+1)].r, source[(ti+1)].g, source[(ti+1)].b);
+		__m256 lv  = _mm256_set_ps(source[ti+w*(h-1)].a, source[ti+w*(h-1)].r, source[ti+w*(h-1)].g, source[ti+w*(h-1)].b, source[(ti+1)+w*(h-1)].a, source[(ti+1)+w*(h-1)].r, source[(ti+1)+w*(h-1)].g, source[(ti+1)+w*(h-1)].b);
+		__m256 val = _mm256_set_ps((float)(r+1)*source[ti].a, (float)(r+1)*source[ti].r, (float)(r+1)*source[ti].g, (float)(r+1)*source[ti].b, (float)(r+1)*source[(ti+1)].a, (float)(r+1)*source[(ti+1)].r, (float)(r+1)*source[(ti+1)].g, (float)(r+1)*source[(ti+1)].b);
+
+
+
+        for(int j=0; j<r; j++){
+			__m256 addend = _mm256_set_ps(source[ti+j*w].a, source[ti+j*w].r, source[ti+j*w].g, source[ti+j*w].b, source[(ti+1)+j*w].a, source[(ti+1)+j*w].r, source[(ti+1)+j*w].g, source[(ti+1)+j*w].b);
+			val = _mm256_add_ps(val, addend);
+		} 
+		
+
+		
+        for(int j=0  ; j<=r ; j++){
+			__m256 addend = _mm256_set_ps(source[ri].a, source[ri].r, source[ri].g, source[ri].b, source[(ri+1)].a, source[(ri+1)].r, source[(ri+1)].g, source[(ri+1)].b);
+			addend = _mm256_sub_ps(addend, fv);
+			val = _mm256_add_ps(val, addend);
+			
+			__m256 product =_mm256_mul_ps(val, iarr_vec);
+			product = _mm256_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+
+			// Convert the floats to 32-bit packed integers with rounding
+			__m256i intVec = _mm256_cvtps_epi32(product);
+
+			// Extract each 32-bit integer, mask to get the lower 8 bits, and store in the structure
+			target[ti].a = (_mm256_extract_epi32(intVec, 7)) & 0xFF;
+			target[ti].r = (_mm256_extract_epi32(intVec, 6)) & 0xFF;
+			target[ti].g = (_mm256_extract_epi32(intVec, 5)) & 0xFF;
+			target[ti].b = (_mm256_extract_epi32(intVec, 4)) & 0xFF;
+			target[(ti+1)].a = (_mm256_extract_epi32(intVec, 3)) & 0xFF;
+			target[(ti+1)].r = (_mm256_extract_epi32(intVec, 2)) & 0xFF;
+			target[(ti+1)].g = (_mm256_extract_epi32(intVec, 1)) & 0xFF;
+			target[(ti+1)].b = (_mm256_extract_epi32(intVec, 0)) & 0xFF;
+
+			ri += w; 
+			ti += w; 
+		}
+
+
+		
+        for(int j=r+1; j<h-r; j++){
+			__m256 riVec = _mm256_set_ps(source[ri].a, source[ri].r, source[ri].g, source[ri].b, source[(ri+1)].a, source[(ri+1)].r, source[(ri+1)].g, source[(ri+1)].b);
+			__m256 liVec = _mm256_set_ps(source[li].a, source[li].r, source[li].g, source[li].b, source[(li+1)].a, source[(li+1)].r, source[(li+1)].g, source[(li+1)].b);
+			__m256 diffVec = _mm256_sub_ps(riVec, liVec);
+			val = _mm256_add_ps(val, diffVec);
+
+			__m256 product =_mm256_mul_ps(val, iarr_vec);
+			product = _mm256_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+
+			// Convert the floats to 32-bit packed integers with rounding
+			__m256i intVec = _mm256_cvtps_epi32(product);
+
+			// Extract each 32-bit integer, mask to get the lower 8 bits, and store in the structure
+			target[ti].a = (_mm256_extract_epi32(intVec, 7)) & 0xFF;
+			target[ti].r = (_mm256_extract_epi32(intVec, 6)) & 0xFF;
+			target[ti].g = (_mm256_extract_epi32(intVec, 5)) & 0xFF;
+			target[ti].b = (_mm256_extract_epi32(intVec, 4)) & 0xFF;
+			target[(ti+1)].a = (_mm256_extract_epi32(intVec, 3)) & 0xFF;
+			target[(ti+1)].r = (_mm256_extract_epi32(intVec, 2)) & 0xFF;
+			target[(ti+1)].g = (_mm256_extract_epi32(intVec, 1)) & 0xFF;
+			target[(ti+1)].b = (_mm256_extract_epi32(intVec, 0)) & 0xFF;
+
+			li += w; 
+			ri += w; 
+			ti += w; 
+		}
+
+        for(int j=h-r; j<h  ; j++){ 
+			__m256 addend = _mm256_set_ps(source[li].a, source[li].r, source[li].g, source[li].b, source[(li+1)].a, source[(li+1)].r, source[(li+1)].g, source[(li+1)].b);
+			addend = _mm256_sub_ps(lv, addend);
+			val = _mm256_add_ps(val, addend);
+			
+			__m256 product =_mm256_mul_ps(val, iarr_vec);
+			product = _mm256_round_ps(product, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+
+			// Convert the floats to 32-bit packed integers with rounding
+			__m256i intVec = _mm256_cvtps_epi32(product);
+
+			// Extract each 32-bit integer, mask to get the lower 8 bits, and store in the structure
+			target[ti].a = (_mm256_extract_epi32(intVec, 7)) & 0xFF;
+			target[ti].r = (_mm256_extract_epi32(intVec, 6)) & 0xFF;
+			target[ti].g = (_mm256_extract_epi32(intVec, 5)) & 0xFF;
+			target[ti].b = (_mm256_extract_epi32(intVec, 4)) & 0xFF;
+			target[(ti+1)].a = (_mm256_extract_epi32(intVec, 3)) & 0xFF;
+			target[(ti+1)].r = (_mm256_extract_epi32(intVec, 2)) & 0xFF;
+			target[(ti+1)].g = (_mm256_extract_epi32(intVec, 1)) & 0xFF;
+			target[(ti+1)].b = (_mm256_extract_epi32(intVec, 0)) & 0xFF;
+
+			li += w; 
+			ti += w; 
+		}
+    }
+}
+
 
 
 static void boxBlurHargb2(const argb_t *source, argb_t *target,int w, int h, int r){
@@ -1309,4 +1421,39 @@ void gaussBlurargb2(argb_t *source, argb_t *target,int source_lenght, int w, int
     boxBlurargb2(source, target, source_lenght, w, h, (int)((bxs[0]-1)/2.f));
     boxBlurargb2(target, source, source_lenght, w, h, (int)((bxs[1]-1)/2.f));
     boxBlurargb2(source, target, source_lenght, w, h, (int)((bxs[2]-1)/2.f));
+}
+
+
+static void boxBlurargb3(argb_t *source, argb_t *target,int source_lenght, int w, int h, int r) {
+    for(int i=0; i<source_lenght; i++){
+		target[i] = source[i];
+	} 
+    boxBlurTargb3(target, source, w, h, r);
+    boxBlurTargb3(source, target, w, h, r);
+}
+
+void gaussBlurargb3(argb_t *source, argb_t *target,int source_lenght, int w, int h, int r) {
+    int n = 3;
+    float bxs[n];
+    float wIdeal = sqrtf((12*r*r/n)+1);  // Ideal averaging filter width
+    int wl = (int)floorf(wIdeal);  
+	if(wl%2==0){ 
+		wl--;
+	}
+    int wu = wl+2;
+
+    float mIdeal = (float)(12*r*r - n*wl*wl - 4*n*wl - 3*n)/(float)(-4*wl - 4);
+    int m = roundf(mIdeal);
+    // var sigmaActual = std::sqrt( (m*wl*wl + (n-m)*wu*wu - n)/12 );
+
+    for(int i=0; i<n;i++){
+        if(i<m){
+			bxs[i] = (float)wl;
+		}else{
+			bxs[i] = (float)wu;
+		}
+    }
+    boxBlurargb3(source, target, source_lenght, w, h, (int)((bxs[0]-1)/2.f));
+    boxBlurargb3(target, source, source_lenght, w, h, (int)((bxs[1]-1)/2.f));
+    boxBlurargb3(source, target, source_lenght, w, h, (int)((bxs[2]-1)/2.f));
 }

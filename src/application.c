@@ -2227,10 +2227,11 @@ static int mainLoop()
 	// gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);
 	// PROFILE(gaussBlurargb(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
 	// PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
-	// if(!NEWFEATURE){
+	// if(NEWFEATURE){
 		PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
 	// }else{
 		PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+		PROFILE(gaussBlurargb3(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
 	// }
 
     // ┃ gaussBlurargb(&botLa... │      30 │ 0.02620 │ 0.03369 │ 0.04468 │ 001.011 (023.70%) ┃ 

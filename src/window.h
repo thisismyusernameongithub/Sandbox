@@ -168,6 +168,7 @@ double getWindowTime(void);
 void gaussBlurf(float *source, float *target, int source_lenght, int w, int h, int r);
 void gaussBlurargb(argb_t *source, argb_t *target, int source_lenght, int w, int h, int r);
 void gaussBlurargb2(argb_t *source, argb_t *target, int source_lenght, int w, int h, int r);
+void gaussBlurargb3(argb_t *source, argb_t *target, int source_lenght, int w, int h, int r);
 
 vec2f_t normalizeVec2f(vec2f_t vector);
 
@@ -177,6 +178,8 @@ void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t co
 
 argb_t argbAdd1(argb_t color1, argb_t color2);
 argb_t argbAdd2(argb_t color1, argb_t color2);
+
+void testFunc(void);
 
 #endif /* WINDOW_H_ */
 
