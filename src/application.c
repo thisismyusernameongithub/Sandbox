@@ -93,8 +93,8 @@ struct{
 
 #define windowSizeX 1024	
 #define windowSizeY 1024
-#define rendererSizeX 1024
-#define rendererSizeY 1024
+#define rendererSizeX 512
+#define rendererSizeY 512
 
 static inline int maxi(const int a, const int b){
     return (a > b) ? a : b;
@@ -1302,6 +1302,7 @@ static void generateColorMap()
 	// memcpy(map.argbBlured, map.argbBuffer, sizeof(map.argb));
 	gaussBlurargb(map.argbBuffer, map.argbBlured, map.w*map.h, map.w, map.h, 10);
 	
+	
 }
 
 
@@ -1987,10 +1988,10 @@ static void init()
 
 	// init camera position, the following will init camera to center overview a 256x256 map
 	// camera: x:336.321991 y:-93.287224 rot:1.570000 zoom:0.609125camera: x:327.101379 y:-84.052345 rot:1.570000 zoom:0.609125
-	g_cam.x = 221.321991;
-	g_cam.y = 21.287224;
+	g_cam.x = 302.6;
+	g_cam.y = -54.5;
 	g_cam.rot = 3.14f / 2;
-	g_cam.zoom = 0.609125;
+	g_cam.zoom = 0.726;
 
 	//Init tool values
 	cursor.amount = 10;
@@ -2228,10 +2229,10 @@ static int mainLoop()
 	// PROFILE(gaussBlurargb(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
 	// PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
 	// if(NEWFEATURE){
-		PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+		// PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
 	// }else{
-		PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
-		PROFILE(gaussBlurargb3(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+		// PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+		// PROFILE(gaussBlurargb3(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
 	// }
 
     // ┃ gaussBlurargb(&botLa... │      30 │ 0.02620 │ 0.03369 │ 0.04468 │ 001.011 (023.70%) ┃ 
