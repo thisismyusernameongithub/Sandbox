@@ -38,7 +38,7 @@
 #define errLog(message) \
 	fprintf(stderr, "\nFile: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -1300,7 +1300,9 @@ static void generateColorMap()
 
 	memcpy(map.argbBuffer, map.argb, sizeof(map.argb));
 	// memcpy(map.argbBlured, map.argbBuffer, sizeof(map.argb));
+	
 	gaussBlurargb(map.argbBuffer, map.argbBlured, map.w*map.h, map.w, map.h, 10);
+	
 	
 	
 }
@@ -1324,7 +1326,7 @@ static void process(float dTime)
             // float deltaV = (map.water[(x-1)+(y)*MAPW].right+map.water[(x)+(y+1)*MAPW].down+map.water[(x+1)+(y)*MAPW].left+map.water[(x)+(y-1)*MAPW].up - (map.water[(x)+(y)*MAPW].right+map.water[(x)+(y)*MAPW].down+map.water[(x)+(y)*MAPW].left+map.water[(x)+(y)*MAPW].up));
 
             if(velDiff > 1.f){
-                // map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + 1.25f;
+                map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + velDiff * 0.001f;
             }
 
 			// map.foamLevel[x+y*map.w] += 0.1f*(map.waterVel[x+y*map.w].x*map.waterVel[x+y*map.w].x+map.waterVel[x+y*map.w].y*map.waterVel[x+y*map.w].y);
@@ -2033,15 +2035,16 @@ static void init()
 	for (int x = 0; x < window.drawSize.w; x++)
 	{
 		// argb_t argb = (argb_t){.b = ((219 + x) >> 2), .g = (((182 + x) >> 2)), .r = (((92 + x) >> 2))};
-		argb_t argb = lerpargb(ARGB(255,222,245,254),ARGB(255,25,47,56),((float)x)/((float)window.drawSize.w)); //Gradient over rendersize
+		argb_t argb = lerpargb(ARGB(255,25,47,56),ARGB(255,222,245,254),((float)x)/((float)window.drawSize.w)); //Gradient over rendersize
 		for (int y = 0; y < window.drawSize.h; y++)
 		{
 
-			if((x & 0x80) ^ (y & 0x80)){
-				background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.water;
-			}else{
-				background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.sand;
-			}
+			background[window.drawSize.w - 1 - x + y * window.drawSize.w] = argb;
+			// if((x & 0x80) ^ (y & 0x80)){
+			// 	background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.water;
+			// }else{
+			// 	background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.sand;
+			// }
 		}
 	}
 
@@ -2089,8 +2092,6 @@ static void init()
 
 }
 
-argb_t testImage1[256*256];
-argb_t testImage2[256*256];
 
 static int mainLoop()
 {
@@ -2230,6 +2231,7 @@ static int mainLoop()
 	// PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
 	// if(NEWFEATURE){
 		// PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
+		// PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
 	// }else{
 		// PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
 		// PROFILE(gaussBlurargb3(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)

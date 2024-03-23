@@ -30,6 +30,7 @@
             "binaryArgs": []
         }
     ],
-    "makefile.clearOutputBeforeBuild": false
+    "makefile.clearOutputBeforeBuild": false,
+    "makefile.makefilePath": "C:\\Users\\dwtys\\OneDrive\\Dokument\\programming\\sandbox\\Sandbox\\Makefile"
     
 }

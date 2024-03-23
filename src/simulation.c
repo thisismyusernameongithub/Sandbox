@@ -62,8 +62,13 @@ void advect(float* restrict densityMatrix, float* restrict bufferMatrix, vec2f_t
             const float dX = (velocityVector[x+y*w].x)*dTime;
             const float dY = (velocityVector[x+y*w].y)*dTime;
 
-            const int xdx = (int)(x-dX);
-            const int ydy = (int)(y-dY);
+			if(dX + dY == 0.f){
+				bufferMatrix[(x)+(y)*w] = densityMatrix[(x)+(y)*w];
+				continue;
+			}
+
+            const int xdx = (int)((float)x-dX);
+            const int ydy = (int)((float)y-dY);
 
 			//If reverse timestep coordinates is out of bounds: skip advection for this cell
             if( xdx < 3 || xdx > w - 3  || ydy < 3 || ydy > h - 3){
@@ -77,8 +82,13 @@ void advect(float* restrict densityMatrix, float* restrict bufferMatrix, vec2f_t
             float f3 = densityMatrix[(xdx)  +(ydy+1)*w];
             float f4 = densityMatrix[(xdx+1)+(ydy+1)*w];
 
-            float tX = (x-dX) - xdx;
-            float tY = (y-dY) - ydy;
+			if(f1 + f2 + f3 + f4 == 0.f){
+				bufferMatrix[(x)+(y)*w] = densityMatrix[(x)+(y)*w];
+				continue;
+			}
+
+            float tX = ((float)x-dX) - (float)xdx;
+            float tY = ((float)y-dY) - (float)ydy;
 
             float amountTransported = blerp(f1,f2,f3,f4,tX,tY);
 

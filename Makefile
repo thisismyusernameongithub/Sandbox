@@ -13,7 +13,7 @@ build\application_em.o: src\application.c
 	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\application.c -o build\application_em.o $(EMSFLAGS)
 
 build\window_em.o: src\window.c
-	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\window.c -o build\window_em.o  $(EMSFLAGS) -mavx
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\window.c -o build\window_em.o  $(EMSFLAGS) -mavx -msimd128
 
 build\simulation_em.o: src\simulation.c
 	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\simulation.c -o build\simulation_em.o  $(EMSFLAGS)
