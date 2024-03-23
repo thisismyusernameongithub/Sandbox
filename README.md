@@ -2,20 +2,25 @@
 
 ## Todo
 
-- [ ] Move zooming camera to a function so the same code isn't everywhere.
+
+- [ ] Make transparent things sample the background framebuffer.
+- [ ] Make map buffers allocated.
+  - [ ] Make map resizable. 
+  - [ ] Make starting camera position adjust to center over map regardless of size.
+- [x] Move zooming camera to a function so the same code isn't everywhere.
 - [ ] Try adding particles that spawn foam. use these as spawners for foam to get better looking foam transport.
-- [ ] Move rendering to different layers.
-- [ ] Make sure colors cannot overflow.
+- [-] Move rendering to different layers.
+- [x] Make sure colors cannot overflow.
 - [x] Move simulation functions into its own .c file
-- [ ] Move project to Clion
-- [ ] Add back lava.
-- [ ] Add back mist.
+- [-] Move project to Clion
+- [x] Add back lava.
+- [x] Add back mist.
 - [ ] Add all camera controls to mouse.
 - [ ] Add touch support.
 - [ ] Foam and sand transport doesn't work very good, mass isn't constant. Something to do with the advection, fix that.
 - [ ] Get nicer colors for stuff.
 - [ ] Make the html look nicer.
-- [ ] Make sediment have color that gets transportet with the sediment.
+- [ ] Make sediment have color that gets transported with the sediment.
 - [x] Move drawPoint and drawLine into window.c
 - [ ] Split map into chunks, each chunk should keep track of what sort of fluids/sand it contains so it only need to update what is present.
 
