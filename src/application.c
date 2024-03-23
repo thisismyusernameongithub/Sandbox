@@ -2275,6 +2275,8 @@ int main()
 	system("CHCP 65001"); //Enable unicode characters in the terminal
 
 
+	printf("%s %d.%d.%d - %s %s\n", APP_NAME, APP_VER_MAJOR, APP_VER_MINOR, APP_VER_BUILD, __DATE__, __TIME__);
+
 	window.drawSize.w = rendererSizeX;
 	window.drawSize.h = rendererSizeY;
 	window.size.w = windowSizeX;

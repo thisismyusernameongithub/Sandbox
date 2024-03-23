@@ -2,7 +2,7 @@
 
 ## Todo
 
-- [ ] Add a version number.
+- [x] Add a version number.
 - [ ] Make transparent things sample the background framebuffer.
 - [ ] Make map buffers allocated.
   - [ ] Make map resizable.

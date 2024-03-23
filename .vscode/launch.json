@@ -16,7 +16,7 @@
             "name": "gcc build and debug active file",
             "type": "cppdbg",
             "request": "launch",
-            "program": "C:/Users/dwtys/OneDrive/Dokument/programming/sandbox/Sandbox/build/application.exe",
+            "program": "C:/Users/dwtys/OneDrive/Dokument/programming/sandbox/Sandbox/build/Sandbox.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
