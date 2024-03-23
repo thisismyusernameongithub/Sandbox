@@ -22,16 +22,16 @@ run: application.exe
 	build\application.exe
 
 application.exe: build\application.o build\window.o build\simulation.o
-	gcc $(CFLAGS) -o build\application.exe build\window.o build\simulation.o build\application.o -lgdi32 -lSDL2 -lSDL2_ttf -lm -lSDL2_image
+	clang -target x86_64-pc-windows-gnu $(CFLAGS) -o build\application.exe build\window.o build\simulation.o build\application.o -L.\dependencies\lib -lgdi32 -lSDL2 -lSDL2_ttf -lm -lSDL2_image
 
 build\application.o: src\application.c
-	gcc $(CFLAGS) -c src\application.c -o build\application.o
+	clang -target x86_64-pc-windows-gnu $(CFLAGS) -c src\application.c -o build\application.o
 
 build\window.o: src\window.c
-	gcc $(CFLAGS) -c src\window.c -o build\window.o -mavx
+	clang -target x86_64-pc-windows-gnu $(CFLAGS) -c src\window.c -o build\window.o -mavx
 
 build\simulation.o: src\simulation.c
-	gcc $(CFLAGS) -c src\simulation.c -o build\simulation.o
+	clang -target x86_64-pc-windows-gnu $(CFLAGS) -c src\simulation.c -o build\simulation.o
 
 
 clean: 
