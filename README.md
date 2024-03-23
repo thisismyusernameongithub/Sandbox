@@ -2,10 +2,10 @@
 
 ## Todo
 
-
+- [ ] Add a version number.
 - [ ] Make transparent things sample the background framebuffer.
 - [ ] Make map buffers allocated.
-  - [ ] Make map resizable. 
+  - [ ] Make map resizable.
   - [ ] Make starting camera position adjust to center over map regardless of size.
 - [x] Move zooming camera to a function so the same code isn't everywhere.
 - [ ] Try adding particles that spawn foam. use these as spawners for foam to get better looking foam transport.
