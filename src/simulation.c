@@ -3,6 +3,11 @@
 #include <math.h> //sqrtf()
 #include <string.h> //memcpy()
 
+#include <immintrin.h> //SIMD stuff
+// #include <avxintrin.h>
+
+
+
 #ifndef M_PI
 	#define M_PI 3.14159265358979323846
 #endif
@@ -62,6 +67,7 @@ void advect(float* restrict densityMatrix, float* restrict bufferMatrix, vec2f_t
             const float dX = (velocityVector[x+y*w].x)*dTime;
             const float dY = (velocityVector[x+y*w].y)*dTime;
 
+			//If there is no velocity then there is no denisty moving into this cell, skip this cell
 			if(dX + dY == 0.f){
 				bufferMatrix[(x)+(y)*w] = densityMatrix[(x)+(y)*w];
 				continue;
@@ -82,6 +88,7 @@ void advect(float* restrict densityMatrix, float* restrict bufferMatrix, vec2f_t
             float f3 = densityMatrix[(xdx)  +(ydy+1)*w];
             float f4 = densityMatrix[(xdx+1)+(ydy+1)*w];
 
+			//If no density is availibe to advect, skip this cell.
 			if(f1 + f2 + f3 + f4 == 0.f){
 				bufferMatrix[(x)+(y)*w] = densityMatrix[(x)+(y)*w];
 				continue;
@@ -242,6 +249,168 @@ void simFluid(fluid_t* restrict fluid, float* restrict terrain, const float g, f
 	fluid_t* restrict f = fluid; // shorter name
 	float* restrict t = terrain; // shorter name
 	const float v = visc;
+	const float dTimeAgbyl = dTime * A * g / l;
+
+	__m128 frictionVec  = _mm_set1_ps(friction);
+	__m128 dTimeAgbylVec  = _mm_set1_ps(dTimeAgbyl);
+	__m128 zeroVec  = _mm_set1_ps(0.f);
+
+	if(visc == 0.f)
+	{
+		for (int y = 0; y < h - 0; y++)
+		{
+			const int yw = y * w;
+			for (int x = 0; x < w - 0; x++)
+			{
+				if((f[(x) + yw].depth) > 0.01f)
+				{
+					__m128 dirVec  = _mm_set_ps(f[x + yw].right, f[x + yw].down, f[x + yw].left, f[x + yw].up);
+					__m128 depth0Vec  = _mm_set1_ps(f[x + yw].depth);
+					__m128 t0Vec  = _mm_set1_ps(t[x + yw]);
+					__m128 depth1Vec  = _mm_set_ps(f[(x + 1) + (yw)].depth, f[(x) + (y + 1) * w].depth, f[(x - 1) + (yw)].depth, f[(x) + (y - 1) * w].depth);
+					__m128 t1Vec  = _mm_set_ps(t[(x + 1) + yw], t[(x) + (y + 1) * w], t[(x - 1) + yw], t[(x) + (y - 1) * w]);
+					__m128 thingVec = _mm_add_ps(depth0Vec, t0Vec);
+					thingVec = _mm_sub_ps(thingVec, depth1Vec);
+					thingVec = _mm_sub_ps(thingVec, t1Vec);
+					// __m128 thingVec  = _mm_set_ps((f[x + yw].depth + t[x + yw] - f[(x + 1) + (yw)].depth    - t[(x + 1) + yw]      ),  (f[x + yw].depth + t[x + yw] - f[(x) + (y + 1) * w].depth - t[(x) + (y + 1) * w] ), (f[x + yw].depth + t[x + yw] - f[(x - 1) + (yw)].depth    - t[(x - 1) + yw]      ), (f[x + yw].depth + t[x + yw] - f[(x) + (y - 1) * w].depth - t[(x) + (y - 1) * w] ));
+					
+					thingVec = _mm_mul_ps(thingVec, dTimeAgbylVec);
+					dirVec = _mm_mul_ps(dirVec, frictionVec);
+					dirVec = _mm_add_ps(dirVec, thingVec);
+					dirVec = _mm_max_ps(dirVec, zeroVec);
+
+					_MM_EXTRACT_FLOAT(f[x + yw].right, dirVec, 3);
+					_MM_EXTRACT_FLOAT(f[x + yw].down, dirVec, 2);
+					_MM_EXTRACT_FLOAT(f[x + yw].left, dirVec, 1);
+					_MM_EXTRACT_FLOAT(f[x + yw].up, dirVec, 0);
+
+
+					// f[x + yw].right = maxf(f[x + yw].right * friction + (f[x + yw].depth + t[x + yw] - f[(x + 1) + (yw)].depth    - t[(x + 1) + yw]      ) * dTimeAgbyl, 0.f);					   
+					// f[x + yw].down  = maxf(f[x + yw].down  * friction + (f[x + yw].depth + t[x + yw] - f[(x) + (y + 1) * w].depth - t[(x) + (y + 1) * w] ) * dTimeAgbyl, 0.f); 
+					// f[x + yw].left  = maxf(f[x + yw].left  * friction + (f[x + yw].depth + t[x + yw] - f[(x - 1) + (yw)].depth    - t[(x - 1) + yw]      ) * dTimeAgbyl, 0.f);						   
+					// f[x + yw].up    = maxf(f[x + yw].up    * friction + (f[x + yw].depth + t[x + yw] - f[(x) + (y - 1) * w].depth - t[(x) + (y - 1) * w] ) * dTimeAgbyl, 0.f);	  
+
+					// float d = f[x + yw].depth;
+					// float V = (d*d) / ((d*d) + 3.f * v * dTime);
+					// f[x + yw].right *= V;
+					// f[x + yw].down  *= V;
+					// f[x + yw].left  *= V;
+					// f[x + yw].up    *= V;
+
+				}
+				else
+				{
+					f[x + yw].right = 0;
+					f[x + yw].down = 0;
+					f[x + yw].left = 0;
+					f[x + yw].up = 0;
+				}
+			}
+		}
+	}
+	else
+	{
+		for (int y = 0; y < h - 0; y++)
+		{
+			const int yw = y * w;
+			for (int x = 0; x < w - 0; x++)
+			{
+				if((f[(x) + (y)*w].depth) > 0.01f)
+				{
+					__m128 dirVec  = _mm_set_ps(f[x + yw].right, f[x + yw].down, f[x + yw].left, f[x + yw].up);
+					__m128 depth0Vec  = _mm_set1_ps(f[x + yw].depth);
+					__m128 t0Vec  = _mm_set1_ps(t[x + yw]);
+					__m128 depth1Vec  = _mm_set_ps(f[(x + 1) + (yw)].depth, f[(x) + (y + 1) * w].depth, f[(x - 1) + (yw)].depth, f[(x) + (y - 1) * w].depth);
+					__m128 t1Vec  = _mm_set_ps(t[(x + 1) + yw], t[(x) + (y + 1) * w], t[(x - 1) + yw], t[(x) + (y - 1) * w]);
+					__m128 thingVec = _mm_add_ps(depth0Vec, t0Vec);
+					thingVec = _mm_sub_ps(thingVec, depth1Vec);
+					thingVec = _mm_sub_ps(thingVec, t1Vec);
+					// __m128 thingVec  = _mm_set_ps((f[x + yw].depth + t[x + yw] - f[(x + 1) + (yw)].depth    - t[(x + 1) + yw]      ),  (f[x + yw].depth + t[x + yw] - f[(x) + (y + 1) * w].depth - t[(x) + (y + 1) * w] ), (f[x + yw].depth + t[x + yw] - f[(x - 1) + (yw)].depth    - t[(x - 1) + yw]      ), (f[x + yw].depth + t[x + yw] - f[(x) + (y - 1) * w].depth - t[(x) + (y - 1) * w] ));
+					
+					thingVec = _mm_mul_ps(thingVec, dTimeAgbylVec);
+					dirVec = _mm_mul_ps(dirVec, frictionVec);
+					dirVec = _mm_add_ps(dirVec, thingVec);
+					dirVec = _mm_max_ps(dirVec, zeroVec);
+
+					_MM_EXTRACT_FLOAT(f[x + yw].right, dirVec, 3);
+					_MM_EXTRACT_FLOAT(f[x + yw].down, dirVec, 2);
+					_MM_EXTRACT_FLOAT(f[x + yw].left, dirVec, 1);
+					_MM_EXTRACT_FLOAT(f[x + yw].up, dirVec, 0);
+
+					// f[x + yw].right = maxf(f[x + yw].right * friction + (f[x + yw].depth + t[x + yw] - f[(x + 1) + (yw)].depth    - t[(x + 1) + yw]      ) * dTime * A * g / l, 0.f);					   
+					// f[x + yw].down  = maxf(f[x + yw].down  * friction + (f[x + yw].depth + t[x + yw] - f[(x) + (y + 1) * w].depth - t[(x) + (y + 1) * w] ) * dTime * A * g / l, 0.f); 
+					// f[x + yw].left  = maxf(f[x + yw].left  * friction + (f[x + yw].depth + t[x + yw] - f[(x - 1) + (yw)].depth    - t[(x - 1) + yw]      ) * dTime * A * g / l, 0.f);						   
+					// f[x + yw].up    = maxf(f[x + yw].up    * friction + (f[x + yw].depth + t[x + yw] - f[(x) + (y - 1) * w].depth - t[(x) + (y - 1) * w] ) * dTime * A * g / l, 0.f);	  
+
+					float d = f[x + yw].depth;
+					float V = (d*d) / ((d*d) + 3.f * v * dTime);
+					f[x + yw].right *= V;
+					f[x + yw].down  *= V;
+					f[x + yw].left  *= V;
+					f[x + yw].up    *= V;
+
+				}
+				else
+				{
+					f[x + y * w].right = 0;
+					f[x + y * w].down = 0;
+					f[x + y * w].left = 0;
+					f[x + y * w].up = 0;
+				}
+			}
+		}
+	}
+
+
+	// // border conditions
+	// for (int y = 0; y < h; y++)
+	// {
+	// 	f[(w - 3) + y * w].right = 0;
+	// 	f[3 + y * w].left = 0;
+	// }
+	// for (int x = 0; x < w; x++)
+	// {
+	// 	f[x + 3 * w].up = 0;
+	// 	f[x + (h - 3) * w].down = 0;
+	// }
+
+	for (int i = 0; i < w*h; i++){
+		// make sure flow out of cell isn't greater than inflow + existing fluid
+		if (f[i].depth - (f[i].right + f[i].down + f[i].left + f[i].up) < 0)
+		{
+			float K = minf(f[i].depth * l * l / ((f[i].right + f[i].down + f[i].left + f[i].up) * dTime), 1.0f);
+			f[i].right *= K;
+			f[i].down  *= K;
+			f[i].left  *= K;
+			f[i].up    *= K;
+		}
+	}
+
+	// update depth
+	for (int y = 0; y < h - 0; y++)
+	{
+		for (int x = 0; x < w - 0; x++)
+		{
+			float deltaV = (f[(x - 1) + (y)*w].right + f[(x) + (y + 1) * w].up + f[(x + 1) + (y)*w].left + f[(x) + (y - 1) * w].down - (f[(x) + (y)*w].right + f[(x) + (y)*w].down + f[(x) + (y)*w].left + f[(x) + (y)*w].up)) * dTime;
+
+			f[(x) + (y)*w].depth = maxf(f[(x) + (y)*w].depth + deltaV / (l * l), 0.f);
+
+
+		}
+	}
+
+
+
+}
+
+
+void simFluidBackup(fluid_t* restrict fluid, float* restrict terrain, const float g, float visc, const float l, const int w, const int h, const float friction, const float dTime)
+{
+
+	const float A = l*l; //Cross sectional area of pipe
+	fluid_t* restrict f = fluid; // shorter name
+	float* restrict t = terrain; // shorter name
+	const float v = visc;
 
 	if(visc == 0.f){
 		for (int y = 0; y < h - 0; y++)
@@ -263,10 +432,10 @@ void simFluid(fluid_t* restrict fluid, float* restrict terrain, const float g, f
 					// f[x + yw].up    *= V;
 
 				}else{
-					f[x + y * w].right = 0;
-					f[x + y * w].down = 0;
-					f[x + y * w].left = 0;
-					f[x + y * w].up = 0;
+					f[x + yw].right = 0;
+					f[x + yw].down = 0;
+					f[x + yw].left = 0;
+					f[x + yw].up = 0;
 				}
 			}
 		}

@@ -1301,7 +1301,10 @@ static void generateColorMap()
 	memcpy(map.argbBuffer, map.argb, sizeof(map.argb));
 	// memcpy(map.argbBlured, map.argbBuffer, sizeof(map.argb));
 	
-	gaussBlurargb(map.argbBuffer, map.argbBlured, map.w*map.h, map.w, map.h, 10);
+	if(window.time.tick.ms100){
+		gaussBlurargb(map.argbBuffer, map.argbBlured, map.w*map.h, map.w, map.h, 10);
+
+	}
 	
 	
 	
@@ -1500,9 +1503,12 @@ argb_t getTileColorMist(int x, int y, int ys, vec2f_t upVec){
 				break;
 			}
 		}else{
-			argb.r = (102+(int)ys)>>2;//67
-			argb.g = (192+(int)ys)>>2;//157
-			argb.b = (229+(int)ys)>>2;//197
+			
+			//If the mist is up against the wall, sample the background picture to make it appear transparent
+			//I don't know why the coordinates are like this, I just tried stuff until it worked....
+			argb.r = background[rendererSizeY - ys].r; //(102+(int)ys)>>2;//67
+			argb.g = background[rendererSizeY - ys].g; //(192+(int)ys)>>2;//157
+			argb.b = background[rendererSizeY - ys].b; //(229+(int)ys)>>2;//197
 
             break;
 
@@ -2088,6 +2094,12 @@ static void init()
             map.height[x + y * map.w] = map.stone[x + y * map.w] + map.sand[x + y * map.w];
         }
     }
+
+	// for(int y=0;y<map.h;y++){
+    //     for(int x=0;x<map.w;x++){
+    //         map.mist[x + y * map.w].depth = 10.f;
+    //     }
+    // }
 
 
 }

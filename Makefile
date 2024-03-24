@@ -1,13 +1,13 @@
 
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
-APP_VER_MINOR = 8
-APP_VER_BUILD = 10
+APP_VER_MINOR = 9
+APP_VER_BUILD = 57
 
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
 
-CFLAGS = -g3  -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable
+CFLAGS = -O3 -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -pg -no-pie
 
 EMSFLAGS = -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread
 
@@ -25,13 +25,13 @@ emscripten: build\application_em.o build\window_em.o build\simulation_em.o
 	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -sASSERTIONS -sSTACK_SIZE=1048576 --emrun -Wextra build\window_em.o build\simulation_em.o build\application_em.o -o application.js  $(EMSFLAGS) --preload-file Resources -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 
 
 build\application_em.o: src\application.c
-	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\application.c -o build\application_em.o $(EMSFLAGS)  
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\application.c -o build\application_em.o $(EMSFLAGS)  $(DEFINES)
 
 build\window_em.o: src\window.c
 	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\window.c -o build\window_em.o  $(EMSFLAGS) -mavx -msimd128
 
 build\simulation_em.o: src\simulation.c
-	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\simulation.c -o build\simulation_em.o  $(EMSFLAGS)
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\simulation.c -o build\simulation_em.o  $(EMSFLAGS)  -mavx -msimd128
 
 run: application.exe
 	build\$(APP_NAME).exe

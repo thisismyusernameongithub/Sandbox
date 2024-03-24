@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "../dependencies/include/SDL2/SDL_ttf.h"
-#include "../dependencies/include/SDL2/SDL_syswm.h"
+// #include "../dependencies/include/SDL2/SDL_syswm.h"
 #include <math.h> //clampf
 #include <immintrin.h> //SIMD stuff
-#include <avxintrin.h>
+// #include <avxintrin.h>
 
 #include "window.h"
 

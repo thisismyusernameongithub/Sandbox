@@ -2,8 +2,9 @@
 
 ## Todo
 
+- [ ] Bug: Lava bleeds over to the other side of the map if you add it over the map edge.
 - [x] Add a version number.
-- [ ] Make transparent things sample the background framebuffer.
+- [x] Make transparent things sample the background framebuffer.
 - [ ] Make map buffers allocated.
   - [ ] Make map resizable.
   - [ ] Make starting camera position adjust to center over map regardless of size.
