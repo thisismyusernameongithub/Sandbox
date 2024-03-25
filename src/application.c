@@ -24,6 +24,12 @@
 #define STB_PERLIN_IMPLEMENTATION
 #include "stb_perlin.h"
 
+#ifndef APP_NAME //These should be defined in the makefile
+	#define APP_NAME "0"
+	#define APP_VER_MAJOR 0
+	#define APP_VER_MINOR 0
+	#define APP_VER_BUILD 0
+#endif
 
 
 // Link -lgdi32 -lSDL2_ttf -lSDL2 -lm -lSDL2_image

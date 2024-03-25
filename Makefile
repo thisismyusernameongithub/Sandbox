@@ -2,7 +2,7 @@
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
 APP_VER_MINOR = 9
-APP_VER_BUILD = 57
+APP_VER_BUILD = 58
 
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
@@ -52,4 +52,4 @@ build\simulation.o: src\simulation.c
 
 
 clean: 
-	cmd //C del build\application.exe build\application.o build\simulation.o build\window.o build\application_em.o build\window_em.o build\simulation_em.o
+	cmd //C del build\application.o build\simulation.o build\window.o build\application_em.o build\window_em.o build\simulation_em.o build\Sandbox.exe gmon.out

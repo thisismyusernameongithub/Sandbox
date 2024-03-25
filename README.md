@@ -2,7 +2,8 @@
 
 ## Todo
 
-- [ ] Bug: Lava bleeds over to the other side of the map if you add it over the map edge.
+- [ ] Bug: Water velocity is messed up at the edge of the map, causes foam to spawn.
+- [ ] Bug: Lava and mist bleeds over to the other side of the map if you add it over the map edge.
 - [x] Add a version number.
 - [x] Make transparent things sample the background framebuffer.
 - [ ] Make map buffers allocated.
