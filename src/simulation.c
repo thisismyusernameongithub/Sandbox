@@ -374,15 +374,15 @@ void simFluid(fluid_t* restrict fluid, float* restrict terrain, const float g, f
 	// 	f[x + (h - 3) * w].down = 0;
 	// }
 
-	for (int i = 0; i < w*h; i++){
+	for (int i = 0; i < w*h ; i++){
 		// make sure flow out of cell isn't greater than inflow + existing fluid
 		if (f[i].depth - (f[i].right + f[i].down + f[i].left + f[i].up) < 0)
 		{
 			float K = minf(f[i].depth * l * l / ((f[i].right + f[i].down + f[i].left + f[i].up) * dTime), 1.0f);
-			f[i].right *= K;
-			f[i].down  *= K;
-			f[i].left  *= K;
-			f[i].up    *= K;
+			f[i].right = f[i].right * K;
+			f[i].down  = f[i].down  * K;
+			f[i].left  = f[i].left  * K;
+			f[i].up    = f[i].up    * K;
 		}
 	}
 

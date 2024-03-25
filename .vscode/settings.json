@@ -20,7 +20,8 @@
         "sdl.h": "c",
         "sdl_syswm.h": "c",
         "immintrin.h": "c",
-        "x86gprintrin.h": "c"
+        "x86gprintrin.h": "c",
+        "functional": "c"
     },
     "cmake.configureOnOpen": true,
     "makefile.launchConfigurations": [

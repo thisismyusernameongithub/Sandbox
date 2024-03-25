@@ -44,7 +44,7 @@
 #define errLog(message) \
 	fprintf(stderr, "\nFile: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -1237,7 +1237,7 @@ static void generateColorMap()
 				argb.g = mini(pallete.stone.g + lavaHeight*15, pallete.lava.g) ;
 				argb.b = mini(pallete.stone.b + lavaHeight*5 , pallete.lava.b) ;
 				
-				argb = lerpargb(argb, pallete.stone, minf(map.lavaFoamLevel[x+ mapPitch], 1.f));
+				
 				// if(slopeX + slopeY > 0.1 && slopeX + slopeY < 1){
 				// 	argb.r += 20;
 				// 	argb.g += 20;
@@ -1255,6 +1255,8 @@ static void generateColorMap()
 				glare = minf(glare*0.05f, 1.f);
 
 				argb = lerpargb(argb, pallete.white, glare);
+
+				argb = lerpargb(argb, map.argbStone[x + mapPitch], minf(1.f/map.lava[x+ mapPitch].depth, 1.f));
 
 			}
 
@@ -1335,7 +1337,7 @@ static void process(float dTime)
             // float deltaV = (map.water[(x-1)+(y)*MAPW].right+map.water[(x)+(y+1)*MAPW].down+map.water[(x+1)+(y)*MAPW].left+map.water[(x)+(y-1)*MAPW].up - (map.water[(x)+(y)*MAPW].right+map.water[(x)+(y)*MAPW].down+map.water[(x)+(y)*MAPW].left+map.water[(x)+(y)*MAPW].up));
 
             if(velDiff > 1.f){
-                map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + velDiff * 0.001f;
+                map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + velDiff * 0.001f * dTime;
             }
 
 			// map.foamLevel[x+y*map.w] += 0.1f*(map.waterVel[x+y*map.w].x*map.waterVel[x+y*map.w].x+map.waterVel[x+y*map.w].y*map.waterVel[x+y*map.w].y);
@@ -1345,7 +1347,7 @@ static void process(float dTime)
 
 //- map.lava[x+y*w].depth/10.f
 			if(map.lava[x+y*w].depth > 0.f){
-				float lavaConverted = minf(map.lava[x+y*w].depth, 1.f * dTime);
+				float lavaConverted = minf(map.lava[x+y*w].depth, clampf(1.f / map.lava[x+y*w].depth, 0.25f, 0.5f)  * dTime);
 				map.lava[x+y*w].depth -= lavaConverted; 
 				map.stone[x+y*w] += lavaConverted;
 				map.stone[x+y*w] += map.sand[x+y*w];
@@ -2101,11 +2103,11 @@ static void init()
         }
     }
 
-	// for(int y=0;y<map.h;y++){
-    //     for(int x=0;x<map.w;x++){
-    //         map.mist[x + y * map.w].depth = 10.f;
-    //     }
-    // }
+	for(int y=0;y<map.h;y++){
+        for(int x=0;x<map.w;x++){
+            // map.water[x + y * map.w].depth = 10.f;
+        }
+    }
 
 
 }
