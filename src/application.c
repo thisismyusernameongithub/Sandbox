@@ -95,8 +95,8 @@ struct{
     .foam       = rgb(210, 210, 210),
     .mist       = rgb(235, 233, 236),
     .sand       = rgb(186, 165, 136),
-    .lava       = rgb(247, 42, 8),
-	.lavaBright = rgb(255, 255, 65)
+    .lava       = rgb(254, 62, 10),
+	.lavaBright = rgb(254, 162, 3)
 };
 
 
@@ -857,7 +857,11 @@ static void updateInput(){
 					break;
 				case TOOL_FOAM:
 					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						map.foamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.foamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+						if(map.present[(cursor.worldX + k) + (cursor.worldY + j) * map.w].lava){
+							map.lavaFoamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.lavaFoamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+						}else{
+							map.foamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.foamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+						}
 					}
 					break;
                 case TOOL_WIND:
@@ -1265,6 +1269,12 @@ static void generateColorMap()
 				argb = lerpargb(argb, pallete.white, glare);
 
 
+				//Add foam
+				if (map.lavaFoamLevel[x + mapPitch] > 0)
+				{
+					argb = lerpargb(argb, pallete.stone, minf(map.lavaFoamLevel[x + mapPitch] / 10.f, 1.f));
+				}
+
 
 				argb = lerpargb(argb, map.argbStone[x + mapPitch], minf(1.f/map.lava[x+ mapPitch].depth, 1.f));
 
@@ -1279,12 +1289,12 @@ static void generateColorMap()
 				argb = lerpargb(argb, pallete.waterDark, minf(map.water[x + mapPitch].depth*0.05f, 1.f));
 
 
-				// if (map.susSed[x + y * map.w] > 0)
-				// {
-				// 	argb.r = lerp(argb.r, pallete.sand.r, minf(map.susSed[x + mapPitch], 0.75f));
-				// 	argb.g = lerp(argb.g, pallete.sand.g, minf(map.susSed[x + mapPitch], 0.75f));
-				// 	argb.b = lerp(argb.b, pallete.sand.b, minf(map.susSed[x + mapPitch], 0.75f));
-				// }
+				if (map.susSed[x + y * map.w] > 0)
+				{
+					argb.r = lerp(argb.r, pallete.sand.r, minf(map.susSed[x + mapPitch], 0.75f));
+					argb.g = lerp(argb.g, pallete.sand.g, minf(map.susSed[x + mapPitch], 0.75f));
+					argb.b = lerp(argb.b, pallete.sand.b, minf(map.susSed[x + mapPitch], 0.75f));
+				}
 				
 				// // highligt according to slope
 				vec2f_t slopeVec = {.x = slopX + 0.000000001f, .y = slopY + 0.000000001f}; //The small addition is to prevent normalizing a zero length vector which we don't handle
@@ -1292,11 +1302,12 @@ static void generateColorMap()
 				
 				float glare = ((slopeVecNorm.x - upVec.x)*(slopeVecNorm.x - upVec.x)+(slopeVecNorm.y - upVec.y)*(slopeVecNorm.y - upVec.y)) * ((x-3) && (y-3) && (x-map.w+3) && (y-map.h+3)); //The thing at the end with makes it so if the x or y position is on the border then slopX and Y gets multiplied by 0 otherwise by 1
 				if(glare != glare) printf("heh\n");
-				glare = minf(glare*0.1f, 1.f);
+				glare = minf(glare*0.05f, 1.f);
 
 				argb = lerpargb(argb, pallete.white, glare);
 
-				argb = lerpargb(argb, pallete.waterLight, clampf( ((slopeVec.x)*(slopeVec.x)+(slopeVec.y)*(slopeVec.y))  * (0.1f-glare) , 0.f, 1.f));
+				argb = lerpargb(argb, pallete.waterLight, clampf( ((slopeVec.x)*(slopeVec.x)+(slopeVec.y)*(slopeVec.y))  * (0.05f-glare) , 0.f, 1.f));
+
 			}
 
 			//Add foam
@@ -1370,6 +1381,15 @@ static void process(float dTime)
 				// map.argbStone[x + y * map.w].r = pallete.stone.r + r*5.f;
 				// map.argbStone[x + y * map.w].g = pallete.stone.g + r*5.f;
 				// map.argbStone[x + y * map.w].b = pallete.stone.b + r*5.f;
+				
+				// if((map.lavaVel[x+y*w].x*map.lavaVel[x+y*w].x)+(map.lavaVel[x+y*w].y*map.lavaVel[x+y*w].y) < 1.f){
+					if(rand() % 10000 < 1){
+						map.lavaFoamLevel[x+y*w] +=  500.f * dTime;
+					}
+
+				// }
+				map.lavaFoamLevel[x+y*w]  = minf(map.lavaFoamLevel[x+y*w], 1000.f);
+				map.lavaFoamLevel[x+y*w] -= minf(map.lavaFoamLevel[x+y*w], 0.01f * dTime);
 
 				if(map.water[x+y*w].depth > 0.f){
 					lavaConverted = minf(minf(map.lava[x+y*w].depth, map.water[x+y*w].depth), 2.f * dTime);
@@ -1387,6 +1407,8 @@ static void process(float dTime)
 					// map.mist[x+y*w].right  += lavaConverted * 5.f; 
 
 				}
+			}else{
+				map.lavaFoamLevel[x+y*w] = 0;
 			}
 
         }
@@ -1438,6 +1460,33 @@ static void process(float dTime)
 
     PROFILE(simFluid(map.lava, map.height, 9.81f, 20.f, 1.f, w, h, 1.f, minf(dTime*program.simSpeed, 0.13f));)
 
+
+	//Handle border conditions of fluids
+	for (int y = 0; y < h; y++)
+	{
+		map.lava[2 + y * w].depth += map.lava[1 + y * w].depth;
+		map.lava[1 + y * w].depth = 0.f;
+		map.lava[1 + y * w].right += map.lava[2 + y * w].left;
+		map.lava[2 + y * w].left = 0.f;
+		map.lava[(w - 2) + y * w].depth += map.lava[(w - 1) + y * w].depth;
+		map.lava[(w - 1) + y * w].depth = 0.f;
+		map.lava[(w - 1) + y * w].left += map.lava[(w - 2) + y * w].right;
+		map.lava[(w - 2) + y * w].right = 0.f;
+		
+	}
+	for (int x = 0; x < w; x++)
+	{
+		map.lava[x + 2 * w].depth += map.lava[x + 1 * w].depth;
+		map.lava[x + 1 * w].depth = 0.f;
+		map.lava[x + 1 * w].up += map.lava[x + 2 * w].down;
+		map.lava[x + 2 * w].down = 0;
+		map.lava[x + (h - 2) * w].depth += map.lava[x + (h - 1) * w].depth;
+		map.lava[x + (h - 1) * w].depth = 0.f;
+		map.lava[x + (h - 1) * w].down += map.lava[x + (h - 2) * w].up;
+		map.lava[x + (h - 2) * w].up = 0.f;
+	}
+
+
 	//Add lava to height
     for(int y=0;y<h;y++){
         for(int x=0;x<w;x++){
@@ -1449,6 +1498,30 @@ static void process(float dTime)
     PROFILE(simFluid(map.mist, map.height, 9.81f, 0.f, 1.f, w, h, 0.90f, minf(dTime*program.simSpeed, 0.13f));)
 
 
+	//Handle border conditions of fluids
+	for (int y = 0; y < h; y++)
+	{
+		map.mist[4 + y * w].depth += map.mist[3 + y * w].depth;
+		map.mist[3 + y * w].depth = 0.f;
+		map.mist[3 + y * w].right += map.mist[4 + y * w].left;
+		map.mist[4 + y * w].left = 0.f;
+		map.mist[(w - 4) + y * w].depth += map.mist[(w - 3) + y * w].depth;
+		map.mist[(w - 3) + y * w].depth = 0.f;
+		map.mist[(w - 3) + y * w].left += map.mist[(w - 4) + y * w].right;
+		map.mist[(w - 4) + y * w].right = 0.f;
+		
+	}
+	for (int x = 0; x < w; x++)
+	{
+		map.mist[x + 4 * w].depth += map.mist[x + 3 * w].depth;
+		map.mist[x + 3 * w].depth = 0.f;
+		map.mist[x + 3 * w].up += map.mist[x + 4 * w].down;
+		map.mist[x + 4 * w].down = 0;
+		map.mist[x + (h - 4) * w].depth += map.mist[x + (h - 3) * w].depth;
+		map.mist[x + (h - 3) * w].depth = 0.f;
+		map.mist[x + (h - 3) * w].down += map.mist[x + (h - 4) * w].up;
+		map.mist[x + (h - 4) * w].up = 0.f;
+	}
 
     for(int y=0;y<h-0;y++){
         for(int x=0;x<w-0;x++){
@@ -1456,8 +1529,8 @@ static void process(float dTime)
             map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left) / (2.f); // X
             map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up) / (2.f);       // Y
 
-			map.lavaVel[x + y * w].x = (map.lava[(x - 1) + (y)*w].right - map.lava[(x) + (y)*w].left + map.lava[(x) + (y)*w].right - map.lava[(x + 1) + (y)*w].left) / (2.f); // X
-            map.lavaVel[x + y * w].y = (map.lava[(x) + (y - 1)*w].down - map.lava[(x) + (y)*w].up + map.lava[(x) + (y)*w].down - map.lava[(x) + (y + 1)*w].up) / (2.f);       // Y
+			map.lavaVel[x + y * w].x = (map.lava[(x - 1) + (y)*w].right - map.lava[(x) + (y)*w].left + map.lava[(x) + (y)*w].right - map.lava[(x + 1) + (y)*w].left) / (32.f); // X
+            map.lavaVel[x + y * w].y = (map.lava[(x) + (y - 1)*w].down - map.lava[(x) + (y)*w].up + map.lava[(x) + (y)*w].down - map.lava[(x) + (y + 1)*w].up) / (32.f);       // Y
 
             map.present[x + y * w].water = (map.water[x + y * w].depth > 0.01f) ? 1 : 0;
             map.present[x + y * w].mist  = (map.mist[x + y * w].depth > 0.01f) ? 1 : 0;
