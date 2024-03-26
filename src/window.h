@@ -140,6 +140,8 @@ typedef struct{
 }argb_t;
 
 #define ARGB(A,R,G,B) (argb_t){.a=(A),.r=(R),.g=(G),.b=(B)}
+#define rgb(R,G,B) (argb_t){.a=(255),.r=(R),.g=(G),.b=(B)} //Not fond of this macro but if you're using VS Code and setting "Editor: Default Color Decorators = True", Then the color picker is enabled in editor when using this macro
+
 
 typedef struct{
 	argb_t * frameBuffer;

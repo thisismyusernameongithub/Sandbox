@@ -44,7 +44,7 @@
 #define errLog(message) \
 	fprintf(stderr, "\nFile: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -71,11 +71,14 @@ struct{
 	argb_t blue;
 	argb_t yellow;
     argb_t stone;
+    argb_t waterDark;
     argb_t water;
+    argb_t waterLight;
     argb_t foam;
     argb_t mist;
     argb_t sand;
 	argb_t lava;
+	argb_t lavaBright;
 }pallete = {
 	.white.argb   = 0xFFFFFFFF,
     .black.argb   = 0xFF000000,
@@ -85,12 +88,15 @@ struct{
 	.green.argb   = 0xFF00FF00,
 	.blue.argb    = 0xFF0000FF,
 	.yellow.argb  = 0xFFFFFF00,
-    .stone.argb   = 0xFF3D3533,
-    .water.argb   = 0xFF4C8A85,
-    .foam.argb    = 0xFFD2D2D2,
-    .mist.argb    = 0xFFEBE9EC,
-    .sand.argb    = 0xFFBAA588,
-    .lava.argb    = 0xFFF69E4C
+    .stone      = rgb(61, 53, 51),
+    .waterDark  = rgb(64, 96, 99),
+    .water      = rgb(76, 138, 133),
+    .waterLight = rgb(147, 189, 168),
+    .foam       = rgb(210, 210, 210),
+    .mist       = rgb(235, 233, 236),
+    .sand       = rgb(186, 165, 136),
+    .lava       = rgb(247, 42, 8),
+	.lavaBright = rgb(255, 255, 65)
 };
 
 
@@ -1237,6 +1243,8 @@ static void generateColorMap()
 				argb.g = mini(pallete.stone.g + lavaHeight*15, pallete.lava.g) ;
 				argb.b = mini(pallete.stone.b + lavaHeight*5 , pallete.lava.b) ;
 				
+				argb = lerpargb(pallete.lava, pallete.lavaBright, minf((map.lava[x+ mapPitch].depth) / 10.f, 1.f));
+				// argb = lerpargb(argb, pallete.white, minf((map.lava[x+ mapPitch].depth) / 50.f, 1.f));
 				
 				// if(slopeX + slopeY > 0.1 && slopeX + slopeY < 1){
 				// 	argb.r += 20;
@@ -1256,34 +1264,39 @@ static void generateColorMap()
 
 				argb = lerpargb(argb, pallete.white, glare);
 
+
+
 				argb = lerpargb(argb, map.argbStone[x + mapPitch], minf(1.f/map.lava[x+ mapPitch].depth, 1.f));
 
 			}
 
 			//Add water if present
 			if(map.present[x + mapPitch].water){
-				float slopX = (map.height[(x + 1) + (y) * map.w] - map.height[(x - 1) + (y) * map.w]); //The thing at the end with makes it so if the x or y position is on the border then slopX and Y gets multiplied by 0 otherwise by 1
+				float slopX = (map.height[(x + 1) + (y) * map.w] - map.height[(x - 1) + (y) * map.w]); 
 				float slopY = (map.height[(x) + (y + 1) * map.w] - map.height[(x) + (y - 1) * map.w]);
 
-				argb = lerpargb(argb, pallete.water, minf(map.water[x + mapPitch].depth*0.05f, 1.f));
+				argb = lerpargb(argb, pallete.water, minf(map.water[x + mapPitch].depth*0.1f, 1.f));
+				argb = lerpargb(argb, pallete.waterDark, minf(map.water[x + mapPitch].depth*0.05f, 1.f));
 
 
-				if (map.susSed[x + y * map.w] > 0)
-				{
-					argb.r = lerp(argb.r, pallete.sand.r, minf(map.susSed[x + mapPitch], 0.75f));
-					argb.g = lerp(argb.g, pallete.sand.g, minf(map.susSed[x + mapPitch], 0.75f));
-					argb.b = lerp(argb.b, pallete.sand.b, minf(map.susSed[x + mapPitch], 0.75f));
-				}
+				// if (map.susSed[x + y * map.w] > 0)
+				// {
+				// 	argb.r = lerp(argb.r, pallete.sand.r, minf(map.susSed[x + mapPitch], 0.75f));
+				// 	argb.g = lerp(argb.g, pallete.sand.g, minf(map.susSed[x + mapPitch], 0.75f));
+				// 	argb.b = lerp(argb.b, pallete.sand.b, minf(map.susSed[x + mapPitch], 0.75f));
+				// }
 				
 				// // highligt according to slope
 				vec2f_t slopeVec = {.x = slopX + 0.000000001f, .y = slopY + 0.000000001f}; //The small addition is to prevent normalizing a zero length vector which we don't handle
-				slopeVec = normalizeVec2f(slopeVec);
+				vec2f_t slopeVecNorm = normalizeVec2f(slopeVec);
 				
-				float glare = ((slopeVec.x - upVec.x)*(slopeVec.x - upVec.x)+(slopeVec.y - upVec.y)*(slopeVec.y - upVec.y)) * ((x-3) && (y-3) && (x-map.w+3) && (y-map.h+3));
+				float glare = ((slopeVecNorm.x - upVec.x)*(slopeVecNorm.x - upVec.x)+(slopeVecNorm.y - upVec.y)*(slopeVecNorm.y - upVec.y)) * ((x-3) && (y-3) && (x-map.w+3) && (y-map.h+3)); //The thing at the end with makes it so if the x or y position is on the border then slopX and Y gets multiplied by 0 otherwise by 1
 				if(glare != glare) printf("heh\n");
 				glare = minf(glare*0.1f, 1.f);
 
 				argb = lerpargb(argb, pallete.white, glare);
+
+				argb = lerpargb(argb, pallete.waterLight, clampf( ((slopeVec.x)*(slopeVec.x)+(slopeVec.y)*(slopeVec.y))  * (0.1f-glare) , 0.f, 1.f));
 			}
 
 			//Add foam
@@ -2301,6 +2314,7 @@ int main()
 	window.drawSize.h = rendererSizeY;
 	window.size.w = windowSizeX;
 	window.size.h = windowSizeY;
+	
 
 
 	window_init();
