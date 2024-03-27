@@ -98,7 +98,7 @@ struct{
     .lava       = rgb(254, 62, 10),
 	.lavaBright = rgb(254, 162, 3)
 };
-
+// https://coolors.co/406063-4c8a85-93bda8-baa588-ebe9ec-d2d2d2-3d3533-fe3e0a-fea203
 
 #define MAPW 256
 #define MAPH 256
@@ -1328,6 +1328,80 @@ static void generateColorMap()
 	}
 
 
+	//Draw cursor
+	float radius = cursor.radius;
+	for (int j = -radius; j <= radius; j++){
+		for (int k = -radius; k <= radius; k++){
+			float r = sqrtf(k * k + j * j);
+				if (r > radius / 4){ continue; } //Skip if outside of cursor cirlce radius
+
+				int x = cursor.worldX + k;
+				int y = cursor.worldY + j;
+				
+				if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
+					switch (cursor.tool)
+					{
+					case TOOL_WATER:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.blue, 0.1f + 0.02f * cursor.amount);
+						break;
+					case TOOL_SAND:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.yellow, 0.1f + 0.02f * cursor.amount);
+						break;
+					case TOOL_STONE:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.white, 0.1f + 0.02f * cursor.amount);
+						break;
+					case TOOL_FOAM:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.green, 0.1f + 0.02f * cursor.amount);
+						break;
+					case TOOL_MIST:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.mist, 0.1f + 0.02f * cursor.amount);
+						break;
+					case TOOL_LAVA:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.orange, 0.1f + 0.02f * cursor.amount);
+						break;
+					case TOOL_WIND:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.red, 0.1f + 0.02f * cursor.amount);
+						break;
+					default:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.black, 0.1f + 0.02f * cursor.amount);
+						break;
+					}
+				}
+		}
+	}
+					
+
+	// if((xwti - cursor.worldX) * (xwti - cursor.worldX) + (ywti - cursor.worldY) * (ywti - cursor.worldY) < cursor.radius*4){ //Why *4?
+	// 	switch (cursor.tool)
+	// 	{
+	// 	case TOOL_WATER:
+	// 		argb = lerpargb(argb, pallete.blue, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	case TOOL_SAND:
+	// 		argb = lerpargb(argb, pallete.yellow, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	case TOOL_STONE:
+	// 		argb = lerpargb(argb, pallete.white, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	case TOOL_FOAM:
+	// 		argb = lerpargb(argb, pallete.green, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	case TOOL_MIST:
+	// 		argb = lerpargb(argb, pallete.mist, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	case TOOL_LAVA:
+	// 		argb = lerpargb(argb, pallete.orange, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	case TOOL_WIND:
+	// 		argb = lerpargb(argb, pallete.red, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	default:
+	// 		argb = lerpargb(argb, pallete.black, 0.1f + 0.02f * cursor.amount);
+	// 		break;
+	// 	}
+		
+	// }
+
 
 
 	memcpy(map.argbBuffer, map.argb, sizeof(map.argb));
@@ -1400,7 +1474,7 @@ static void process(float dTime)
 					map.water[x+y*w].up    -= lavaConverted * 1.f; 
 					map.water[x+y*w].left  -= lavaConverted * 1.f; 
 					map.water[x+y*w].right -= lavaConverted * 1.f; 
-					map.mist[x+y*w].depth  += lavaConverted * 5.f; 
+					map.mist[x+y*w].depth  += lavaConverted * 4.f; 
 					// map.mist[x+y*w].down   += lavaConverted * 5.f; 
 					// map.mist[x+y*w].up     += lavaConverted * 5.f; 
 					// map.mist[x+y*w].left   += lavaConverted * 5.f; 
@@ -1410,6 +1484,8 @@ static void process(float dTime)
 			}else{
 				map.lavaFoamLevel[x+y*w] = 0;
 			}
+
+			map.mist[x+y*w].depth -= minf(map.mist[x+y*w].depth, 0.25f * dTime);
 
         }
     }
@@ -1675,36 +1751,6 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 			}
 			
 
-			if((xwti - cursor.worldX) * (xwti - cursor.worldX) + (ywti - cursor.worldY) * (ywti - cursor.worldY) < cursor.radius*4){ //Why *4?
-				switch (cursor.tool)
-				{
-				case TOOL_WATER:
-					argb = lerpargb(argb, pallete.blue, 0.1f + 0.02f * cursor.amount);
-					break;
-				case TOOL_SAND:
-					argb = lerpargb(argb, pallete.yellow, 0.1f + 0.02f * cursor.amount);
-					break;
-				case TOOL_STONE:
-					argb = lerpargb(argb, pallete.white, 0.1f + 0.02f * cursor.amount);
-					break;
-				case TOOL_FOAM:
-					argb = lerpargb(argb, pallete.green, 0.1f + 0.02f * cursor.amount);
-					break;
-                case TOOL_MIST:
-					argb = lerpargb(argb, pallete.mist, 0.1f + 0.02f * cursor.amount);
-					break;
-				case TOOL_LAVA:
-					argb = lerpargb(argb, pallete.orange, 0.1f + 0.02f * cursor.amount);
-					break;
-                case TOOL_WIND:
-					argb = lerpargb(argb, pallete.red, 0.1f + 0.02f * cursor.amount);
-                    break;
-				default:
-					argb = lerpargb(argb, pallete.black, 0.1f + 0.02f * cursor.amount);
-					break;
-				}
-				
-			}
 
 
 
