@@ -44,7 +44,7 @@
 #define errLog(message) \
 	fprintf(stderr, "\nFile: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -105,8 +105,8 @@ struct{
 
 #define windowSizeX 1024	
 #define windowSizeY 1024
-#define rendererSizeX 512
-#define rendererSizeY 512
+#define rendererSizeX 2048
+#define rendererSizeY 2048
 
 static inline int maxi(const int a, const int b){
     return (a > b) ? a : b;
@@ -908,7 +908,7 @@ static void updateInput(){
 		g_cam.y += cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
 
 		// Print camera pos
-		// printf("camera: x:%f y:%f rot:%f zoom:%f", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
+		printf("camera: x:%f y:%f rot:%f zoom:%f", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
 	}
 	if (key.S == eKEY_HELD){
 		g_cam.x += sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
@@ -1632,7 +1632,10 @@ argb_t getTileColorMist(int x, int y, int ys, vec2f_t upVec){
 // renders one pixel column
 static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, float ywt, float dDxw, float dDyw, camera_t camera)
 {
-	// save some variables as local
+	
+	float camZoom = camera.zoom;
+	float camZoomDiv = 1.f / camera.zoom;
+	float camZoomDivBySqrt2 = (camZoomDiv) /  sqrtf(2.f);
 
 	// init some variables
 
@@ -1651,18 +1654,11 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 
 		int ywti = (int)ywt;
 		int xwti = (int)xwt;
-		float camZoom = camera.zoom;
-		float camZoomDiv = 1.f / camera.zoom;
-
-		//        float gndHeight = map.packed[posID].height;//map.stone[posID] + map.sand[posID]; //not using map.height ensures instant terrain update, map.height is okay for blurry/unclear renderings as underwater
-		//        float wtrHeight = map.packed[posID].water; //map.water[posID].depth;
-		float mistHeight = 0; // Map.mistHeight[posID];
-		float lavaHeight = 0; // Map.lavaHeight[posID];
 
 
 
-		ys = y - (map.height[xwti + ywti * map.w] + map.mist[xwti + ywti * map.w].depth) * (camZoomDiv) /  sqrtf(2.f);  // offset y by terrain height (sqr(2) is to adjust for isometric projection)
-		// ys = y - (mapPack.height) * camZoomDiv; // offset y by terrain height
+		ys = y - (map.height[xwti + ywti * map.w] + map.mist[xwti + ywti * map.w].depth) * camZoomDivBySqrt2;  // offset y by terrain height (sqr(2) is to adjust for isometric projection)
+
 		ys = ys * !(ys & 0x80000000);			// Non branching version of : ys = maxf(ys, 0);
 
 		if (ys < ybuffer)
@@ -1677,53 +1673,7 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 			}else{
 				argb = map.argb[xwti + ywti * map.w];
 			}
-			// else if (map.present[xwti + ywti*map.w].water)
-			// { // draw water if present
-			// 	argb = getTileColorWater(xwti, ywti, ys, upVec, 1.f);
-
-            //     argb.r *= map.shadow[xwti + ywti * map.w];
-            //     argb.g *= map.shadow[xwti + ywti * map.w];
-            //     argb.b *= map.shadow[xwti + ywti * map.w];
-
-			// }
-			// else if (lavaHeight > 0.f)
-			// { // draw lava if present
-			// 	//	rgb lavaRGB = getTileColorLava(xwti, ywti, 0.f);
-			// 	//	r = lavaRGB.r;
-			// 	//	g = lavaRGB.g;
-			// 	//	b = lavaRGB.b;
-            //         argb.r = 0;
-			// 		argb.g = 0;
-			// 		argb.b = 0;
-			// }
-			// else
-			// { // only ground
-			// 	//				xwt + ywt*map.w;  	202, 188, 145
-            //     argb = getTileColorGround(xwti, ywti);
-
-            //     if (map.foamLevel[xwti + ywti * map.w] > 0)
-            //     {
-            //         argb.r = lerp(argb.r, pallete.foam.r, minf(map.foamLevel[xwti + ywti * map.w] / 20.f, 1.f));
-            //         argb.g = lerp(argb.g, pallete.foam.g, minf(map.foamLevel[xwti + ywti * map.w] / 20.f, 1.f));
-            //         argb.b = lerp(argb.b, pallete.foam.b, minf(map.foamLevel[xwti + ywti * map.w] / 20.f, 1.f));
-            //     }
-
-            //     argb.r *= map.shadow[xwti + ywti * map.w];
-            //     argb.g *= map.shadow[xwti + ywti * map.w];
-            //     argb.b *= map.shadow[xwti + ywti * map.w];
-
-			// }
-
 			
-
-
-
-			// calculate and draw cursor branchlessly
-			// argb.g += 30 * (((uint32_t)(((xwti - cursor.worldX) * (xwti - cursor.worldX) +
-			// 							 (ywti - cursor.worldY) * (ywti - cursor.worldY)) -
-			// 							((int)(cursor.radius) << 4)) &
-			// 				 0x80000000) >>
-			// 				31);
 
 			if((xwti - cursor.worldX) * (xwti - cursor.worldX) + (ywti - cursor.worldY) * (ywti - cursor.worldY) < cursor.radius*4){ //Why *4?
 				switch (cursor.tool)
@@ -1758,30 +1708,16 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 
 
 
-
 			// make borders of tiles darker, make it so they become darker the more zoomed in you are
 			if (camZoom < 0.3f && !border)
 			{
 				argb = lerpargb(argb, pallete.black, camZoomDiv/255.f);
 			}
 
-			// clamp color values
-			//			argb = (minf(maxf(r,0),255) << 16) | (minf(maxf(g,0),255) << 8) | (minf(maxf(b,0),255)); //85-87
-
-			//                argb = (argb_t) {
-			//                        .r = CLAMP(r, 0, 255),
-			//                        .g = CLAMP(g, 0, 255),
-			//                        .b = CLAMP(b, 0, 255)
-			//                };
-			//                    ((CLAMP(r,0,255)) << 16) | ((CLAMP(g,0,255)) << 8) | (CLAMP(b,0,255)); //86-90
 
 			// only draw visible pixels
 			for (register int Y = ybuffer - 1; Y >= ys; Y--)
 			{
-				//            for (register int Y = ys ; Y < ybuffer ; Y++) {
-				//                int ix = rendTexture.h - (ybuffer-ys) + Y + (x) * rendTexture.h;
-
-				//                frameBuffer[ix] = argb;    //draw pixels
 				frameBuffer[window.drawSize.h - 1 - Y + (x)*window.drawSize.h] = argb; // draw pixels
 			}
 			
@@ -2090,10 +2026,21 @@ static void init()
 
 	// init camera position, the following will init camera to center overview a 256x256 map
 	// camera: x:336.321991 y:-93.287224 rot:1.570000 zoom:0.609125camera: x:327.101379 y:-84.052345 rot:1.570000 zoom:0.609125
-	g_cam.x = 302.6;
-	g_cam.y = -54.5;
+	
+	//The equation for starting camera position was found by sampling three correct starting positions at three different resolutions
+	// res	 x	        y	        z
+	// 256	 517,614   -273,724	    1,4669
+	// 512	 302,6	    -54,5	    0,726
+	// 1024	-129,934	395,956	    0,369
+	// 2048	-977,719	1287,959	0,184
+
+	// g_cam.x = 302.6;
+	g_cam.x = rendererSizeX * -0.8343 + 729.11;
+	// g_cam.y = -54.5;
+	g_cam.y = rendererSizeY * 0.8724 - 498.59;
 	g_cam.rot = 3.14f / 2;
-	g_cam.zoom = 0.726;
+	// g_cam.zoom = 0.726;
+	g_cam.zoom = 366.03 * pow(rendererSizeX, -0.996);
 
 	//Init tool values
 	cursor.amount = 10;
