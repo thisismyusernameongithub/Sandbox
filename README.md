@@ -2,32 +2,44 @@
 
 ## Todo
 
+- [ ] Rendering doesn't work properly while autogenerating map adn scropping through coordinates, somethign to do with multithreading.
+- [ ] Add water to terrain generation.
+- [ ] Add erosion brush.
+- [ ] Make windbrush follow the direction and speed of the mouse.
 - [ ] Bug: Water velocity is messed up at the edge of the map, causes foam to spawn.
-- [x] Bug: Lava and mist bleeds over to the other side of the map if you add it over the map edge.
-- [x] Add a version number.
-- [x] Make transparent things sample the background framebuffer.
 - [ ] Make map buffers allocated.
   - [ ] Make map resizable.
   - [ ] Make starting camera position adjust to center over map regardless of size.
-- [x] Move zooming camera to a function so the same code isn't everywhere.
 - [ ] Try adding particles that spawn foam. use these as spawners for foam to get better looking foam transport.
-- [-] Move rendering to different layers.
-- [x] Make sure colors cannot overflow.
-- [x] Move simulation functions into its own .c file
-- [-] Move project to Clion
-- [x] Add back lava.
-- [x] Add back mist.
 - [ ] Add all camera controls to mouse.
 - [ ] Add touch support.
 - [ ] Foam and sand transport doesn't work very good, mass isn't constant. Something to do with the advection, fix that.
 - [ ] Get nicer colors for stuff.
 - [ ] Make the html look nicer.
 - [ ] Make sediment have color that gets transported with the sediment.
-- [x] Move drawPoint and drawLine into window.c
 - [ ] Split map into chunks, each chunk should keep track of what sort of fluids/sand it contains so it only need to update what is present.
 
 ## Done
 
+### v0.10
+
+- [x] Doubled the rendering resolution to 1024x1024.
+- [x] Added multithreading, the simulation step of the next frame now starts at the same time as the software rendering.
+- [x] Limit zoom distance so that no artifacts happens at the edge of the map.
+
+### v0.9
+
+- [x] Bug: Lava and mist bleeds over to the other side of the map if you add it over the map edge.
+- [x] Add a version number.
+- [x] Make transparent things sample the background framebuffer.
+- [x] Move zooming camera to a function so the same code isn't everywhere.
+- [-] Move rendering to different layers.
+- [x] Make sure colors cannot overflow.
+- [x] Move simulation functions into its own .c file
+- [-] Move project to Clion
+- [x] Add back lava.
+- [x] Add back mist.
+- [x] Move drawPoint and drawLine into window.c
 - [x] Add back foam.
 
 ## Ideas
@@ -69,7 +81,7 @@ Paste this in launch.json, this disables CORS as well as enables multithreading 
 {
     // Use IntelliSense to learn about possible attributes.
     // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    // For more information, visit: <https://go.microsoft.com/fwlink/?linkid=830387>
     "version": "0.2.0",
     "configurations": [
         {

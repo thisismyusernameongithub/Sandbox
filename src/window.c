@@ -223,7 +223,7 @@ static void updateTime(void)
 	frameCount++;
 	if (window.time.tick.ms100)
 	{
-		window.time.fps = 0.1 * (double)(frameCount - frameCountOld) * 10.0 + 0.9 * window.time.fps;
+		window.time.fps = 0.5 * (double)(frameCount - frameCountOld) * 10.0 + 0.5 * window.time.fps;
 		frameCountOld = frameCount;
 	}
 }

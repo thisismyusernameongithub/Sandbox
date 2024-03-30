@@ -2,15 +2,15 @@
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
 APP_VER_MINOR = 10
-APP_VER_BUILD = 386
+APP_VER_BUILD = 507
 
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
 
-CFLAGS = -O3 -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable
+CFLAGS = -O3 -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -pthread -lpthread
 #-pg -no-pie #Enable profiling data out gmon.out
 
-EMSFLAGS = -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread
+EMSFLAGS = -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread -sPTHREAD_POOL_SIZE=8 
 
 # Increment APP_VER_BUILD number by 1
 increment_version:

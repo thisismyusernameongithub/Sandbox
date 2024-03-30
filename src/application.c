@@ -44,7 +44,7 @@
 #define errLog(message) \
 	fprintf(stderr, "\nFile: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -105,8 +105,8 @@ struct{
 
 #define windowSizeX 1024	
 #define windowSizeY 1024
-#define rendererSizeX 2048
-#define rendererSizeY 2048
+#define rendererSizeX 1024
+#define rendererSizeY 1024
 
 static inline int maxi(const int a, const int b){
     return (a > b) ? a : b;
@@ -127,13 +127,13 @@ static inline float minf(const float a, const float b)
     return (a < b) ? a : b;
 }
 
-static float clampf(const float value, const float min, const float max) 
+static inline float clampf(const float value, const float min, const float max) 
 {
     const float t = value < min ? min : value;
     return t > max ? max : t;
 }
 
-static float cosLerp(const float y1, const float y2, const float mu)
+static inline float cosLerp(const float y1, const float y2, const float mu)
 {
 	const double mu2 = (1-cos(mu*M_PI))/2;
 	return(y1*(1-mu2)+y2*mu2);
@@ -222,14 +222,10 @@ typedef struct{
 } camera_t;
 
 camera_t g_cam = {
-    .limits.zoomMax = 10.f,
+    .limits.zoomMax = 0.5f,
     .limits.zoomMin = 0.03f
 };
 
-#define CHUNKW 64
-#define CHUNKH 64
-#define NOCHUNKSW 2
-#define NOCHUNKSH 2
 
 struct{
 	int w;
@@ -237,9 +233,6 @@ struct{
 	float tileWidth; // width of one tile, used for adjusting fluid simulation
 	argb_t argbSed[MAPW * MAPH];
 	argb_t argbStone[MAPW * MAPH];
-	struct{
-		argb_t argb[CHUNKW * CHUNKH];
-	}test[NOCHUNKSW * NOCHUNKSH];
 	argb_t argb[MAPW * MAPH];
 	argb_t argbBlured[MAPW * MAPH];
 	argb_t argbBuffer[MAPW * MAPH];
@@ -273,6 +266,12 @@ struct{
 	} flags;
 } map;
 
+struct{
+	float height[MAPW * MAPH];
+	float mistDepth[MAPW * MAPH];
+	argb_t argb[MAPW * MAPH];
+	argb_t argbBlured[MAPW * MAPH];
+}renderMapBuffer; //Stores stuff from map that will be used for rendering, frees up the map structure to be updated for next frame while current frame is rendering
 
 typedef struct{
 	float x;
@@ -303,6 +302,7 @@ argb_t background[rendererSizeX * rendererSizeY]; // Stores background image tha
 
 float totalFoamLevel;
 float totalSandLevel;
+float totalSusSedLevel;
 float totalStoneLevel;
 float totalWaterLevel;
 float totalMistLevel;
@@ -310,6 +310,9 @@ float totalLavaLevel;
 Layer botLayer;
 Layer topLayer;
 
+// Define a mutex to synchronize access to the framebuffer
+pthread_mutex_t renderMap_mutex = PTHREAD_MUTEX_INITIALIZER;
+atomic_int renderStep = 0;
 
 
 static vec2f_t world2screen(float x, float y, camera_t camera)
@@ -1306,7 +1309,8 @@ static void generateColorMap()
 
 				argb = lerpargb(argb, pallete.white, glare);
 
-				argb = lerpargb(argb, pallete.waterLight, clampf( ((slopeVec.x)*(slopeVec.x)+(slopeVec.y)*(slopeVec.y))  * (0.05f-glare) , 0.f, 1.f));
+				//I want to give a look where the water normal vector is facing the camera is lighter, unfourtunately this shallow water on slopes to be light as well so I removed it until I have a better solution.
+				// argb = lerpargb(argb, pallete.waterLight, clampf( ((slopeVec.x)*(slopeVec.x)+(slopeVec.y)*(slopeVec.y))  * (0.05f-glare) , 0.f, 1.f));
 
 			}
 
@@ -1369,38 +1373,7 @@ static void generateColorMap()
 				}
 		}
 	}
-					
 
-	// if((xwti - cursor.worldX) * (xwti - cursor.worldX) + (ywti - cursor.worldY) * (ywti - cursor.worldY) < cursor.radius*4){ //Why *4?
-	// 	switch (cursor.tool)
-	// 	{
-	// 	case TOOL_WATER:
-	// 		argb = lerpargb(argb, pallete.blue, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	case TOOL_SAND:
-	// 		argb = lerpargb(argb, pallete.yellow, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	case TOOL_STONE:
-	// 		argb = lerpargb(argb, pallete.white, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	case TOOL_FOAM:
-	// 		argb = lerpargb(argb, pallete.green, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	case TOOL_MIST:
-	// 		argb = lerpargb(argb, pallete.mist, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	case TOOL_LAVA:
-	// 		argb = lerpargb(argb, pallete.orange, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	case TOOL_WIND:
-	// 		argb = lerpargb(argb, pallete.red, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	default:
-	// 		argb = lerpargb(argb, pallete.black, 0.1f + 0.02f * cursor.amount);
-	// 		break;
-	// 	}
-		
-	// }
 
 
 
@@ -1417,7 +1390,7 @@ static void generateColorMap()
 }
 
 
-static void process(float dTime)
+static void simulation(float dTime)
 {
     int w = map.w;
     int h = map.h;
@@ -1497,7 +1470,7 @@ static void process(float dTime)
         }
     }
 
-    PROFILE(simFluid(map.water, map.height, 9.81f, 0.f, 1.f, w, h, 0.97f, minf(dTime*program.simSpeed, 0.13f));)
+    PROFILE(simFluid(map.water, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.97f, minf(dTime*program.simSpeed, 0.13f));)
 
 
 
@@ -1534,7 +1507,7 @@ static void process(float dTime)
         }
     }
 
-    PROFILE(simFluid(map.lava, map.height, 9.81f, 20.f, 1.f, w, h, 1.f, minf(dTime*program.simSpeed, 0.13f));)
+    PROFILE(simFluid(map.lava, map.height, 9.81f, 20.f, map.tileWidth, w, h, 1.f, minf(dTime*program.simSpeed, 0.13f));)
 
 
 	//Handle border conditions of fluids
@@ -1571,7 +1544,7 @@ static void process(float dTime)
     }
 
 
-    PROFILE(simFluid(map.mist, map.height, 9.81f, 0.f, 1.f, w, h, 0.90f, minf(dTime*program.simSpeed, 0.13f));)
+    PROFILE(simFluid(map.mist, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.90f, minf(dTime*program.simSpeed, 0.13f));)
 
 
 	//Handle border conditions of fluids
@@ -1657,18 +1630,18 @@ argb_t getTileColorMist(int x, int y, int ys, vec2f_t upVec){
 //Ide, använd screen2world för att få rutan som motsvarar botten istället.
     argb_t argb = pallete.red;
 
-    float mistHeight =  map.height[x+y*map.w] + map.mist[x+y*map.w].depth;
+    float mistHeight =  renderMapBuffer.height[x+y*map.w] + renderMapBuffer.mistDepth[x+y*map.w];
 
     float d;
     for(d = 0.f; d < 300.f; d += 1.f){
 		int X = x+upVec.x*d;
 		int Y = y+upVec.y*d;
 		if(X >= 0 && X < map.w && Y >= 0 && Y < map.h){
-			if(map.height[(int)(x+upVec.x*d)+(int)(y+upVec.y*d)*map.w] > mistHeight - (d * 0.79f)){ //0.7071f = 1/sqrt(2)
+			if(renderMapBuffer.height[(int)(x+upVec.x*d)+(int)(y+upVec.y*d)*map.w] > mistHeight - (d * 0.79f)){ //0.7071f = 1/sqrt(2)
 
-				argb = map.argb[X+Y*map.w];
+				argb = renderMapBuffer.argb[X+Y*map.w];
 
-				argb = lerpargb(argb, map.argbBlured[X+Y*map.w], minf(d/10.f, 1.f));
+				argb = lerpargb(argb, renderMapBuffer.argbBlured[X+Y*map.w], minf(d/10.f, 1.f));
 
 				break;
 			}
@@ -1733,7 +1706,7 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 
 
 
-		ys = y - (map.height[xwti + ywti * map.w] + map.mist[xwti + ywti * map.w].depth) * camZoomDivBySqrt2;  // offset y by terrain height (sqr(2) is to adjust for isometric projection)
+		ys = y - (renderMapBuffer.height[xwti + ywti * map.w] + renderMapBuffer.mistDepth[xwti + ywti * map.w]) * camZoomDivBySqrt2;  // offset y by terrain height (sqr(2) is to adjust for isometric projection)
 
 		ys = ys * !(ys & 0x80000000);			// Non branching version of : ys = maxf(ys, 0);
 
@@ -1747,19 +1720,15 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 			{
                 argb = getTileColorMist(xwti, ywti, ys, upVec);
 			}else{
-				argb = map.argb[xwti + ywti * map.w];
+				argb = renderMapBuffer.argb[xwti + ywti * map.w];
 			}
 			
-
-
-
 
 			// make borders of tiles darker, make it so they become darker the more zoomed in you are
 			if (camZoom < 0.3f && !border)
 			{
 				argb = lerpargb(argb, pallete.black, camZoomDiv/255.f);
 			}
-
 
 			// only draw visible pixels
 			for (register int Y = ybuffer - 1; Y >= ys; Y--)
@@ -1819,6 +1788,78 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 
 static void render()
 {
+
+	clearLayer(botLayer);
+	clearLayer(topLayer);
+
+	drawText(topLayer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
+
+	
+
+
+#ifdef DEBUG
+    int cwx = clampf(cursor.worldX, 0, map.w);
+    int cwy = clampf(cursor.worldY, 0, map.h);
+	drawText(topLayer, 10, 30,  printfLocal("Mouse: %d, %d | %d, %d | zoom: %f", mouse.pos.x, mouse.pos.y, cwx, cwy, g_cam.zoom) );
+	drawText(topLayer, 10, 50,  printfLocal("Shadow: %f", map.shadow[cwx+cwy*map.w]));
+	drawText(topLayer, 10, 70,  printfLocal("foam: %f total: %f", map.foamLevel[cwx+cwy*map.w], totalFoamLevel));
+	drawText(topLayer, 10, 90,  printfLocal("Stone: %f total: %f", map.stone[cwx+cwy*map.w], totalStoneLevel));
+	drawText(topLayer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*map.w], totalSandLevel));
+    drawText(topLayer, 10, 130, printfLocal("Water: %f total: %f", map.water[cwx+cwy*map.w].depth, totalWaterLevel));
+    drawText(topLayer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*map.w].depth, totalMistLevel));
+
+    //Draw water is present data
+	for (int y = 0; y < map.h; y++)
+	{
+		for (int x = 0; x < map.w; x++)
+		{
+            if(map.present[x+y*map.w].water){
+                vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+                sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
+                // drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
+            }
+        }
+    }
+
+	//Draw water velocity markers
+	for (int y = 0; y < map.h; y++)
+	{
+		if((y % 10)) continue;
+		for (int x = 0; x < map.w; x++)
+		{
+			if((x % 10)) continue;
+			float x2 = x + map.waterVel[x + y * map.w].x;
+			float y2 = y + map.waterVel[x + y * map.w].y;
+			vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+			vec2f_t sPos2 = world2screen((float)x2+0.5f,(float)y2+0.5f,g_cam);
+			// sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
+			// sPos2.y = sPos2.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
+			// float vel = sqrtf((map.waterVel[x + y * map.w].x*map.waterVel[x + y * map.w].x)+(map.waterVel[x + y * map.w].y*map.waterVel[x + y * map.w].y));
+			// drawLine(topLayer, sPos.x,sPos.y, sPos2.x, sPos2.y, pallete.white);
+			// drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
+		}
+	}
+
+	//Draw mouse position
+	for (int y = -1; y < 1; y++)
+	{
+		for (int x = -1; x < 1; x++)
+		{
+			if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
+			{
+				if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
+				{
+					// topLayer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * topLayer.w].argb = 0xFFFFFFFF;
+				}
+			}
+		}
+	}
+
+	
+
+#endif
+
+
 	// Since this runs on a separate thread from input update I need to back up camera variables so they don't change during rendering
 	camera_t cam;
 	cam.rot = g_cam.rot;
@@ -1829,7 +1870,6 @@ static void render()
 
 	// Copy background to framebuffer
 	memcpy(frameBuffer, background, sizeof(frameBuffer));
-
 
 
 	float xw, yw;
@@ -1935,7 +1975,7 @@ static void render()
 		PROFILE(renderColumn(x, botMostYCoord, topMostYCoord, upVec, worldCoord.x, worldCoord.y, dDxw, dDyw, cam);)
 	}
 
-	// for memory access pattern reasons the terrain gets drawn sideways. That's why we below transpose the framebuffer while copying it to rendTexture
+	// for memory access pattern reasons the terrain gets drawn sideways. That's why we below transpose the framebuffer while copying it to the framebuffer
 	for (int y = 0; y < window.drawSize.h; y++)
 	{
 		int pixelPitch = y * window.drawSize.w;
@@ -2192,44 +2232,12 @@ static void init()
 }
 
 
-static int mainLoop()
-{
 
-	clearLayer(botLayer);
-	clearLayer(topLayer);
-
-	char titleString[100];
-	sprintf(titleString, "fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime);
-	if(window.time.tick.ms100) window_setTitle(titleString);
-
-	updateInput();
-
-	if (fabsf(g_cam.rot) < 45.f * M_PI / 180.f || fabsf(g_cam.rot) >= 315.f * M_PI / 180.f)
-	{
-		g_cam.direction = NW;
-	}
-	else if (fabsf(g_cam.rot) < 135.f * M_PI / 180.f)
-	{
-		g_cam.direction = NE;
-	}
-	else if (fabsf(g_cam.rot) < 225.f * M_PI / 180.f)
-	{
-		g_cam.direction = SE;
-	}
-	else if (fabsf(g_cam.rot) < 315.f * M_PI / 180.f)
-	{
-		g_cam.direction = SW;
-	}
-	else
-	{
-		fprintf(stderr, "Unitialized value used at %s %d\n", __FILE__, __LINE__);
-		exit(0);
-	}
+void process(){
+	
 
 
-	PROFILE(process(window.time.dTime););
-
-
+	PROFILE(simulation(window.time.dTime););
 
 	if (window.time.tick.ms10 || map.flags.updateShadowMap == true)
 	{
@@ -2241,130 +2249,95 @@ static int mainLoop()
 		PROFILE(generateColorMap(););
 	}
 
-	PROFILE(render();)
 
-	drawText(topLayer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
-
-	
-
-
-#ifdef DEBUG
-    int cwx = clampf(cursor.worldX, 0, map.w);
-    int cwy = clampf(cursor.worldY, 0, map.h);
-	drawText(topLayer, 10, 30,  printfLocal("Mouse: %d, %d | %d, %d | zoom: %f", mouse.pos.x, mouse.pos.y, cwx, cwy, g_cam.zoom) );
-	drawText(topLayer, 10, 50,  printfLocal("Shadow: %f", map.shadow[cwx+cwy*map.w]));
-	drawText(topLayer, 10, 70,  printfLocal("foam: %f total: %f", map.foamLevel[cwx+cwy*map.w], totalFoamLevel));
-	drawText(topLayer, 10, 90,  printfLocal("Stone: %f total: %f", map.stone[cwx+cwy*map.w], totalStoneLevel));
-	drawText(topLayer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*map.w], totalSandLevel));
-    drawText(topLayer, 10, 130, printfLocal("Water: %f total: %f", map.water[cwx+cwy*map.w].depth, totalWaterLevel));
-    drawText(topLayer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*map.w].depth, totalMistLevel));
-
-    //Draw water is present data
-	for (int y = 0; y < map.h; y++)
-	{
-		for (int x = 0; x < map.w; x++)
-		{
-            if(map.present[x+y*map.w].water){
-                vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-                sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
-                // drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
-            }
-        }
-    }
-
-	//Draw water velocity markers
-	for (int y = 0; y < map.h; y++)
-	{
-		if((y % 10)) continue;
-		for (int x = 0; x < map.w; x++)
-		{
-			if((x % 10)) continue;
-			float x2 = x + map.waterVel[x + y * map.w].x;
-			float y2 = y + map.waterVel[x + y * map.w].y;
-			vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-			vec2f_t sPos2 = world2screen((float)x2+0.5f,(float)y2+0.5f,g_cam);
-			// sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
-			// sPos2.y = sPos2.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
-			// float vel = sqrtf((map.waterVel[x + y * map.w].x*map.waterVel[x + y * map.w].x)+(map.waterVel[x + y * map.w].y*map.waterVel[x + y * map.w].y));
-			// drawLine(topLayer, sPos.x,sPos.y, sPos2.x, sPos2.y, pallete.white);
-			// drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
-		}
-	}
-
-	//Draw mouse position
-	for (int y = -1; y < 1; y++)
-	{
-		for (int x = -1; x < 1; x++)
-		{
-			if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
-			{
-				if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
-				{
-					topLayer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * topLayer.w].argb = 0xFFFFFFFF;
-				}
-			}
-		}
-	}
-
-	
-
-	// drawSquare(topLayer, 200, 100, 100, 100, pallete.sand); //middle
-
-	// argb_t result1;
-
-	// PROFILE(result1 = argbAdd1(pallete.sand, ARGB(255,24,53,53));)
-
-	// drawSquare(topLayer, 100, 100, 100, 100, result1);
-	
-	// argb_t result2;
-
-	// PROFILE(result2 = argbAdd2(pallete.sand, ARGB(255,24,53,53));)
-
-	// drawSquare(topLayer, 300, 100, 100, 100, result2);
-#endif
-
-	
-
-	// gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);
-	// PROFILE(gaussBlurargb(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
-	// PROFILE(gaussBlurargb2(&botLayer.frameBuffer[botLayer.w*(botLayer.h/2)], &topLayer.frameBuffer[botLayer.w*(botLayer.h/2)], topLayer.w*(topLayer.h/2), topLayer.w, topLayer.h/2, 10);)
-	// if(NEWFEATURE){
-		// PROFILE(gaussBlurargb(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
-		// PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
-	// }else{
-		// PROFILE(gaussBlurargb2(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
-		// PROFILE(gaussBlurargb3(botLayer.frameBuffer, topLayer.frameBuffer, topLayer.w*topLayer.h, topLayer.w, topLayer.h, 10);)
-	// }
-
-    // ┃ gaussBlurargb(&botLa... │      30 │ 0.02620 │ 0.03369 │ 0.04468 │ 001.011 (023.70%) ┃ 
-	// ┠─────────────────────────┼─────────┼─────────┼─────────┼─────────┼───────────────────┨
-	// ┃ gaussBlurargb2(&botL... │      30 │ 0.02662 │ 0.03383 │ 0.04392 │ 001.015 (023.80%) ┃ 
-	// ┗━━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛
-	// ┠─────────────────────────┼─────────┼─────────┼─────────┼─────────┼───────────────────┨
-	// ┃ gaussBlurargb(botLay... │      16 │ 0.30330 │ 0.33900 │ 0.45386 │ 005.424 (049.43%) ┃ 
-	// ┠─────────────────────────┼─────────┼─────────┼─────────┼─────────┼───────────────────┨
-	// ┃ gaussBlurargb2(botLa... │      16 │ 0.22572 │ 0.25419 │ 0.40468 │ 004.067 (037.06%) ┃ 
-	// ┗━━━━━━━━━━━━━━━━━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛
-	return window_run();
 }
 
-// void* testThread(){
-// 	while(1){
-// 		render();
 
-// 	}
-// 	return NULL;
-// }
+static int mainLoop()
+{
 
-// void* testThread2(){
-// 	while(1){
-// 		printf("kuk\n");
 
-// 	}
-// 	return NULL;
-// }
+	char titleString[100];
+	sprintf(titleString, "fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime);
+	if(window.time.tick.ms100) window_setTitle(titleString);
 
-atomic_int threadDone = 0;
+	
+
+
+	
+	int returnValue = 1;
+	if(renderStep != 2){
+		
+		returnValue = 1;
+	}else{
+
+
+
+		updateInput();
+
+		if (fabsf(g_cam.rot) < 45.f * M_PI / 180.f || fabsf(g_cam.rot) >= 315.f * M_PI / 180.f)
+		{
+			g_cam.direction = NW;
+		}
+		else if (fabsf(g_cam.rot) < 135.f * M_PI / 180.f)
+		{
+			g_cam.direction = NE;
+		}
+		else if (fabsf(g_cam.rot) < 225.f * M_PI / 180.f)
+		{
+			g_cam.direction = SE;
+		}
+		else if (fabsf(g_cam.rot) < 315.f * M_PI / 180.f)
+		{
+			g_cam.direction = SW;
+		}
+
+
+
+		returnValue = window_run();
+
+		renderStep = 0;
+	}
+
+	return returnValue;
+}
+
+void* renderThread(){
+	while(1){
+		while(renderStep != 1){}
+		render();
+		
+		renderStep = 2;
+
+
+	}
+	return NULL;
+}
+
+void* processThread(){
+	while(1){
+
+		process();
+		
+
+		//After proccess is done, wait until mainloop has
+		while(renderStep != 0){}
+		//Update buffers that render will use
+		for(int i = 0; i < MAPW * MAPH; i++)
+		{
+			renderMapBuffer.height[i] = map.height[i];
+			renderMapBuffer.mistDepth[i] = map.mist[i].depth;
+			renderMapBuffer.argb[i] = map.argb[i];
+			renderMapBuffer.argbBlured[i] = map.argbBlured[i];
+		}
+		renderStep = 1;
+
+
+
+	}
+	return NULL;
+}
+
 
 int main()
 {
@@ -2391,13 +2364,14 @@ int main()
 	topLayer = window_createLayer();
 
 	init();
-	// pthread_t render_pthread;
-	// pthread_t render_pthread2;
-	// /* create a second thread which executes inc_x(&x) */
-	// if(pthread_create(&render_pthread, NULL, testThread, NULL)) printf("Error creating thread\n");
-	// if(pthread_create(&render_pthread2, NULL, testThread2, NULL)) printf("Error creating thread\n");
 
-testFunc();
+
+	//Create two seperate running threads, one will update the simulation and one will render the map
+	pthread_t render_pthread;
+	pthread_t process_pthread;
+	
+	if(pthread_create(&render_pthread, NULL, renderThread, NULL)) printf("Error creating thread\n");
+	if(pthread_create(&process_pthread, NULL, processThread, NULL)) printf("Error creating thread\n");
 
 #ifdef __EMSCRIPTEN__
 	emscripten_set_main_loop((void (*)(void))mainLoop, 0, 1);
