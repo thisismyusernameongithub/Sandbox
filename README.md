@@ -2,6 +2,7 @@
 
 ## Todo
 
+- [ ] Add white color to edges / fast moving water to look like foam.
 - [ ] Rendering doesn't work properly while autogenerating map adn scropping through coordinates, somethign to do with multithreading.
 - [ ] Add water to terrain generation.
 - [ ] Add erosion brush.
@@ -23,9 +24,7 @@
 
 ### v0.10
 
-- [x] Doubled the rendering resolution to 1024x1024.
-- [x] Added multithreading, the simulation step of the next frame now starts at the same time as the software rendering.
-- [x] Limit zoom distance so that no artifacts happens at the edge of the map.
+r
 
 ### v0.9
 

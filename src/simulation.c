@@ -27,6 +27,13 @@ static inline float minf(float a, float b){
     return (a < b) ? a : b;
 }
 
+
+static inline float clampf(const float value, const float min, const float max) 
+{
+    const float t = value < min ? min : value;
+    return t > max ? max : t;
+}
+
 static inline float lerp(float s, float e, float t)
 {
 	return s + (e - s) * t;
@@ -68,7 +75,7 @@ void advect(float* restrict densityMatrix, float* restrict bufferMatrix, vec2f_t
             const float dY = (velocityVector[x+y*w].y)*dTime;
 
 			//If there is no velocity then there is no denisty moving into this cell, skip this cell
-			if(dX + dY == 0.f){
+			if(dX == 0.f && dY == 0.f){
 				bufferMatrix[(x)+(y)*w] = densityMatrix[(x)+(y)*w];
 				continue;
 			}

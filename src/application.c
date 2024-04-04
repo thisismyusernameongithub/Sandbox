@@ -44,7 +44,7 @@
 #define errLog(message) \
 	fprintf(stderr, "\nFile: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -292,6 +292,18 @@ TerrainGen terrainGen = {
 	.x = 0.f,
 	.y = 0.f
 };
+
+
+#define FOAMSPAWNER_MAX (1000)
+int foamSpawnerHead = 0;
+struct{
+	vec2f_t pos;
+	float amount;
+}foamSpawner[FOAMSPAWNER_MAX] = {
+	{},{.pos.x = 100, .pos.y = 100, .amount = 1000.f}
+};
+
+
 
 
 static argb_t getTileColorWater(int x, int y, int ys, vec2f_t upVec, float shade);
@@ -1311,7 +1323,11 @@ static void generateColorMap()
 
 				//I want to give a look where the water normal vector is facing the camera is lighter, unfourtunately this shallow water on slopes to be light as well so I removed it until I have a better solution.
 				// argb = lerpargb(argb, pallete.waterLight, clampf( ((slopeVec.x)*(slopeVec.x)+(slopeVec.y)*(slopeVec.y))  * (0.05f-glare) , 0.f, 1.f));
-
+				
+				
+				//Foam at high velocity
+				// float vel = (map.waterVel[x + mapPitch].x*map.waterVel[x + mapPitch].x) + (map.waterVel[x + mapPitch].y*map.waterVel[x + mapPitch].y);
+				// argb = lerpargb(argb, pallete.foam, minf(vel * 0.001f, 1.f));
 			}
 
 			//Add foam
@@ -1395,6 +1411,22 @@ static void simulation(float dTime)
     int w = map.w;
     int h = map.h;
 
+
+	for(int i = 0; i < FOAMSPAWNER_MAX; i++){
+		if(foamSpawner[i].amount > 0.f){
+			float x = foamSpawner[i].pos.x;
+			float y = foamSpawner[i].pos.y;
+
+			foamSpawner[i].pos.x += map.waterVel[(int)x + (int)y * map.w].x * dTime;
+			foamSpawner[i].pos.y += map.waterVel[(int)x + (int)y * map.w].y * dTime;
+
+			float spawnAmount = minf(foamSpawner[i].amount, 100.f * dTime);
+			foamSpawner[i].amount -= spawnAmount;
+			map.foamLevel[(int)x + (int)y * map.w] += spawnAmount;
+
+		}
+	}
+
     //foam
     //spawn foam where water is turbulent
     for(int y=1;y<h-1;y++){
@@ -1403,12 +1435,17 @@ static void simulation(float dTime)
 //			float velX = map.waterVel[x+y*map.w].x;
 //			float velY = map.waterVel[x+y*map.w].y;
             //curl is something, velDiff is speed difference with nearby tiles
-//			float curl = map.waterVel[(x+1)+y*map.w].y - map.waterVel[(x-1)+y*map.w].y - map.waterVel[x+(y+1)*map.w].x + map.waterVel[x+(y-1)*map.w].y;
+			float curl = map.waterVel[(x+1)+y*map.w].y - map.waterVel[(x-1)+y*map.w].y - map.waterVel[x+(y+1)*map.w].x + map.waterVel[x+(y-1)*map.w].y;
             float velDiff = map.waterVel[x+y*w].x*2 - map.waterVel[(x-1)+(y)*w].x - map.waterVel[(x+1)+(y)*w].x + map.waterVel[x+y*w].y*2 - map.waterVel[x+(y-1)*w].y - map.waterVel[x+(y+1)*w].y;
-            // float deltaV = (map.water[(x-1)+(y)*MAPW].right+map.water[(x)+(y+1)*MAPW].down+map.water[(x+1)+(y)*MAPW].left+map.water[(x)+(y-1)*MAPW].up - (map.water[(x)+(y)*MAPW].right+map.water[(x)+(y)*MAPW].down+map.water[(x)+(y)*MAPW].left+map.water[(x)+(y)*MAPW].up));
+            float deltaV = (map.water[(x-1)+(y)*MAPW].right+map.water[(x)+(y+1)*MAPW].down+map.water[(x+1)+(y)*MAPW].left+map.water[(x)+(y-1)*MAPW].up - (map.water[(x)+(y)*MAPW].right+map.water[(x)+(y)*MAPW].down+map.water[(x)+(y)*MAPW].left+map.water[(x)+(y)*MAPW].up));
 
-            if(velDiff > 1.f){
+            if(deltaV > 10.f){
                 map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + velDiff * 0.001f * dTime;
+				// foamSpawnerHead++;
+				// if(foamSpawnerHead > FOAMSPAWNER_MAX) foamSpawnerHead = 0;
+				// foamSpawner[foamSpawnerHead].pos.x = x;
+				// foamSpawner[foamSpawnerHead].pos.y = y;
+				// foamSpawner[foamSpawnerHead].amount = velDiff;
             }
 
 			// map.foamLevel[x+y*map.w] += 0.1f*(map.waterVel[x+y*map.w].x*map.waterVel[x+y*map.w].x+map.waterVel[x+y*map.w].y*map.waterVel[x+y*map.w].y);
@@ -1420,8 +1457,8 @@ static void simulation(float dTime)
 			if(map.lava[x+y*w].depth > 0.f){
 				float lavaConverted = minf(map.lava[x+y*w].depth, clampf(1.f / map.lava[x+y*w].depth, 0.25f, 0.5f)  * dTime);
 				map.lava[x+y*w].depth -= lavaConverted; 
-				map.stone[x+y*w] += lavaConverted;
-				map.stone[x+y*w] += map.sand[x+y*w];
+				map.stone[x+y*w] += lavaConverted * 0.5f;
+				map.stone[x+y*w] += map.sand[x+y*w] * 0.75f;
 				map.sand[x+y*w] = 0.f;
 
 				// float r = sinf(window.time.ms10 / 100.f);
@@ -1470,42 +1507,6 @@ static void simulation(float dTime)
         }
     }
 
-    PROFILE(simFluid(map.water, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.97f, minf(dTime*program.simSpeed, 0.13f));)
-
-
-
-	//Handle border conditions of fluids
-	for (int y = 0; y < h; y++)
-	{
-		map.water[3 + y * w].depth += map.water[2 + y * w].depth;
-		map.water[2 + y * w].depth = 0.f;
-		map.water[2 + y * w].right += map.water[3 + y * w].left;
-		map.water[3 + y * w].left = 0.f;
-		map.water[(w - 3) + y * w].depth += map.water[(w - 2) + y * w].depth;
-		map.water[(w - 2) + y * w].depth = 0.f;
-		map.water[(w - 2) + y * w].left += map.water[(w - 3) + y * w].right;
-		map.water[(w - 3) + y * w].right = 0.f;
-		
-	}
-	for (int x = 0; x < w; x++)
-	{
-		map.water[x + 3 * w].depth += map.water[x + 2 * w].depth;
-		map.water[x + 2 * w].depth = 0.f;
-		map.water[x + 2 * w].up += map.water[x + 3 * w].down;
-		map.water[x + 3 * w].down = 0;
-		map.water[x + (h - 3) * w].depth += map.water[x + (h - 2) * w].depth;
-		map.water[x + (h - 2) * w].depth = 0.f;
-		map.water[x + (h - 2) * w].down += map.water[x + (h - 3) * w].up;
-		map.water[x + (h - 3) * w].up = 0.f;
-	}
-
-
-    //Add water to height
-    for(int y=0;y<h;y++){
-        for(int x=0;x<w;x++){
-            map.height[x + y * w] += map.water[x + y * w].depth;
-        }
-    }
 
     PROFILE(simFluid(map.lava, map.height, 9.81f, 20.f, map.tileWidth, w, h, 1.f, minf(dTime*program.simSpeed, 0.13f));)
 
@@ -1544,6 +1545,44 @@ static void simulation(float dTime)
     }
 
 
+    PROFILE(simFluid(map.water, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.97f, minf(dTime*program.simSpeed, 0.13f));)
+
+
+
+	//Handle border conditions of fluids
+	for (int y = 0; y < h; y++)
+	{
+		map.water[3 + y * w].depth += map.water[2 + y * w].depth;
+		map.water[2 + y * w].depth = 0.f;
+		map.water[2 + y * w].right += map.water[3 + y * w].left;
+		map.water[3 + y * w].left = 0.f;
+		map.water[(w - 3) + y * w].depth += map.water[(w - 2) + y * w].depth;
+		map.water[(w - 2) + y * w].depth = 0.f;
+		map.water[(w - 2) + y * w].left += map.water[(w - 3) + y * w].right;
+		map.water[(w - 3) + y * w].right = 0.f;
+		
+	}
+	for (int x = 0; x < w; x++)
+	{
+		map.water[x + 3 * w].depth += map.water[x + 2 * w].depth;
+		map.water[x + 2 * w].depth = 0.f;
+		map.water[x + 2 * w].up += map.water[x + 3 * w].down;
+		map.water[x + 3 * w].down = 0;
+		map.water[x + (h - 3) * w].depth += map.water[x + (h - 2) * w].depth;
+		map.water[x + (h - 2) * w].depth = 0.f;
+		map.water[x + (h - 2) * w].down += map.water[x + (h - 3) * w].up;
+		map.water[x + (h - 3) * w].up = 0.f;
+	}
+
+
+    //Add water to height
+    for(int y=0;y<h;y++){
+        for(int x=0;x<w;x++){
+            map.height[x + y * w] += map.water[x + y * w].depth;
+        }
+    }
+
+
     PROFILE(simFluid(map.mist, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.90f, minf(dTime*program.simSpeed, 0.13f));)
 
 
@@ -1572,11 +1611,11 @@ static void simulation(float dTime)
 		map.mist[x + (h - 4) * w].up = 0.f;
 	}
 
-    for(int y=0;y<h-0;y++){
-        for(int x=0;x<w-0;x++){
+    for(int y=4;y<h-5;y++){
+        for(int x=4;x<w-5;x++){
             // calculate velocity
-            map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left) / (2.f); // X
-            map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up) / (2.f);       // Y
+            map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left); // X
+            map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up);       // Y
 
 			map.lavaVel[x + y * w].x = (map.lava[(x - 1) + (y)*w].right - map.lava[(x) + (y)*w].left + map.lava[(x) + (y)*w].right - map.lava[(x + 1) + (y)*w].left) / (32.f); // X
             map.lavaVel[x + y * w].y = (map.lava[(x) + (y - 1)*w].down - map.lava[(x) + (y)*w].up + map.lava[(x) + (y)*w].down - map.lava[(x) + (y + 1)*w].up) / (32.f);       // Y
@@ -1807,54 +1846,65 @@ static void render()
 	drawText(topLayer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*map.w], totalSandLevel));
     drawText(topLayer, 10, 130, printfLocal("Water: %f total: %f", map.water[cwx+cwy*map.w].depth, totalWaterLevel));
     drawText(topLayer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*map.w].depth, totalMistLevel));
+	drawText(topLayer, 10, 170,  printfLocal("waterVel: %f, %f", map.waterVel[cwx+cwy*map.w].x, map.waterVel[cwx+cwy*map.w].y));
 
     //Draw water is present data
-	for (int y = 0; y < map.h; y++)
-	{
-		for (int x = 0; x < map.w; x++)
-		{
-            if(map.present[x+y*map.w].water){
-                vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-                sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
-                // drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
-            }
-        }
-    }
+	// for (int y = 0; y < map.h; y++)
+	// {
+	// 	for (int x = 0; x < map.w; x++)
+	// 	{
+    //         if(map.present[x+y*map.w].water){
+    //             vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+    //             sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)   / (sqrtf(2.f) * g_cam.zoom);
+    //             drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
+    //         }
+    //     }
+    // }
 
 	//Draw water velocity markers
-	for (int y = 0; y < map.h; y++)
-	{
-		if((y % 10)) continue;
-		for (int x = 0; x < map.w; x++)
-		{
-			if((x % 10)) continue;
-			float x2 = x + map.waterVel[x + y * map.w].x;
-			float y2 = y + map.waterVel[x + y * map.w].y;
-			vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-			vec2f_t sPos2 = world2screen((float)x2+0.5f,(float)y2+0.5f,g_cam);
-			// sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
-			// sPos2.y = sPos2.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / g_cam.zoom;
-			// float vel = sqrtf((map.waterVel[x + y * map.w].x*map.waterVel[x + y * map.w].x)+(map.waterVel[x + y * map.w].y*map.waterVel[x + y * map.w].y));
-			// drawLine(topLayer, sPos.x,sPos.y, sPos2.x, sPos2.y, pallete.white);
-			// drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
-		}
-	}
+	// for (int y = 0; y < map.h; y++)
+	// {
+	// 	if((y % 10)) continue;
+	// 	for (int x = 0; x < map.w; x++)
+	// 	{
+	// 		if((x % 10)) continue;
+	// 		float x2 = x + map.waterVel[x + y * map.w].x;
+	// 		float y2 = y + map.waterVel[x + y * map.w].y;
+	// 		vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+	// 		vec2f_t sPos2 = world2screen((float)x2+0.5f,(float)y2+0.5f,g_cam);
+	// 		sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)   / (sqrtf(2.f) * g_cam.zoom);
+	// 		sPos2.y = sPos2.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)   / (sqrtf(2.f) * g_cam.zoom);
+	// 		float vel = sqrtf((map.waterVel[x + y * map.w].x*map.waterVel[x + y * map.w].x)+(map.waterVel[x + y * map.w].y*map.waterVel[x + y * map.w].y));
+	// 		drawLine(topLayer, sPos.x,sPos.y, sPos2.x, sPos2.y, pallete.white);
+	// 		drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
+	// 	}
+	// }
 
 	//Draw mouse position
-	for (int y = -1; y < 1; y++)
-	{
-		for (int x = -1; x < 1; x++)
-		{
-			if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
-			{
-				if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
-				{
-					// topLayer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * topLayer.w].argb = 0xFFFFFFFF;
-				}
-			}
+	// for (int y = -1; y < 1; y++)
+	// {
+	// 	for (int x = -1; x < 1; x++)
+	// 	{
+	// 		if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
+	// 		{
+	// 			if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
+	// 			{
+	// 				topLayer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * topLayer.w].argb = 0xFFFFFFFF;
+	// 			}
+	// 		}
+	// 	}
+	// }
+
+	//Draw foamspawner
+	for(int i = 0; i < FOAMSPAWNER_MAX; i++){
+		if(foamSpawner[i].amount > 0.f){
+			int x = foamSpawner[i].pos.x;
+			int y = foamSpawner[i].pos.y;
+			vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+			sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / (sqrtf(2.f) * g_cam.zoom);
+			drawSquare(topLayer, sPos.x - 1, sPos.y - 1, 2, 2, pallete.red);
 		}
 	}
-
 	
 
 #endif
@@ -2302,7 +2352,7 @@ static int mainLoop()
 	return returnValue;
 }
 
-void* renderThread(){
+void* renderThread(void* arg){
 	while(1){
 		while(renderStep != 1){}
 		render();
@@ -2314,7 +2364,7 @@ void* renderThread(){
 	return NULL;
 }
 
-void* processThread(){
+void* processThread(void* arg){
 	while(1){
 
 		process();
