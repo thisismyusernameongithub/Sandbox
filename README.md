@@ -1,5 +1,10 @@
 # Readme
 
+This is fluid simulation and terrain editing toy written in C.
+The project is playable in the browser thanks to emscripten.
+
+Play here: <https://benkt1.itch.io/sandbox>
+
 ## Todo
 
 - [ ] Add white color to edges / fast moving water to look like foam.
@@ -24,7 +29,7 @@
 
 ### v0.10
 
-r
+- [x] Seperated rendering and simulation into seperate threads.
 
 ### v0.9
 
@@ -32,10 +37,10 @@ r
 - [x] Add a version number.
 - [x] Make transparent things sample the background framebuffer.
 - [x] Move zooming camera to a function so the same code isn't everywhere.
-- [-] Move rendering to different layers.
+- [-] ~~Move rendering to different layers.~~
 - [x] Make sure colors cannot overflow.
 - [x] Move simulation functions into its own .c file
-- [-] Move project to Clion
+- [-] ~~Move project to Clion~~
 - [x] Add back lava.
 - [x] Add back mist.
 - [x] Move drawPoint and drawLine into window.c
