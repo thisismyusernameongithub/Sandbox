@@ -5,8 +5,8 @@ The project is playable in the browser thanks to emscripten.
 
 Play here: <https://benkt1.itch.io/sandbox>
 
-![test](versions\media\Screenshot_2024-03-30_224156.png)
-![test](versions\media\Screenshot_2024-03-26_224435.png)
+![lava and water](versions/media/Screenshot_2024-03-30_224156.png)
+![lava](versions/media/Screenshot_2024-03-26_224435.png)
 
 ## Todo
 
