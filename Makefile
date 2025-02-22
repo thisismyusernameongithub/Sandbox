@@ -1,16 +1,56 @@
-
+# Application settings
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
 APP_VER_MINOR = 10
-APP_VER_BUILD = 603
-
+APP_VER_BUILD = 1190
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
 
-CFLAGS = -g3 -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -pthread -lpthread
-#-pg -no-pie #Enable profiling data out gmon.out
+# Directories
+SRCDIR = src
+DEPDIR = dependencies/src
+BUILDDIR = build
 
-EMSFLAGS = -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 -sUSE_SDL_TTF=2 -pthread -sPTHREAD_POOL_SIZE=8 
+
+# Compiler flags etc.
+CFLAGS = -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-parameter
+LFLAGS = -L.\dependencies\lib -lgdi32 -lSDL2 -lSDL2_ttf -lm -lSDL2_image 
+
+
+# Uncomment the following block to enable a full set of Clang sanitizers
+ifeq ($(OS),Windows_NT)
+	# On Windows, no sanitizer
+else
+	# On other platforms, enable a full set of sanitizers
+	SANITIZERS = address,undefined,thread,memory,leak,dataflow
+	CFLAGS += -fsanitize=$(SANITIZERS)
+	LFLAGS += -fsanitize=$(SANITIZERS)
+endif
+
+# Uncomment for Debugging
+LFLAGS += -Wl,--warn-common -Wl,--demangle
+CFLAGS += -g3 -D_FORTIFY_SOURCE=2 -fstack-clash-protection -fcf-protection=full -fno-omit-frame-pointer -fstack-protector-all
+
+# Uncomment for all optimizations
+# CFLAGS += -flto -O3 -march=native -ffast-math -funroll-loops -fomit-frame-pointer -fno-stack-protector -fno-exceptions
+# LFLAGS += -Wl,-O3,--strip-all,--as-needed -flto -fuse-linker-plugin
+
+EMSFLAGS = -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 \
+           -sUSE_SDL_TTF=2 -sUSE_WEBGL2=1 -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sASSERTIONS -sGL_ASSERTIONS \
+           -sSTACK_SIZE=1048576 --emrun
+
+# Source files for native build (update these lists to add new files)
+NATIVE_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c
+NATIVE_OBJS = $(patsubst %.c,$(BUILDDIR)/%.o,$(NATIVE_SRCS))
+
+# Source files for Emscripten build
+EM_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c
+EM_OBJS = $(patsubst %.c,$(BUILDDIR)/%_em.o,$(EM_SRCS))
+
+# Glad object files (common for both builds)
+GLAD_SRC = glad.c
+GLAD_OBJ  = $(BUILDDIR)/glad.o
+GLAD_EM_OBJ = $(BUILDDIR)/glad_em.o
 
 # Increment APP_VER_BUILD number by 1
 increment_version:
@@ -20,37 +60,79 @@ increment_version:
 
 
 
-all: application.exe emscripten
+###############################
+# Pattern rules for native build
+###############################
 
-emscripten: build\application_em.o build\window_em.o build\simulation_em.o
-	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -sASSERTIONS -sSTACK_SIZE=1048576 --emrun -Wextra build\window_em.o build\simulation_em.o build\application_em.o -o application.js  $(EMSFLAGS) --preload-file Resources -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 
-
-build\application_em.o: src\application.c
-	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\application.c -o build\application_em.o $(EMSFLAGS)  $(DEFINES)
-
-build\window_em.o: src\window.c
-	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\window.c -o build\window_em.o  $(EMSFLAGS) -mavx -msimd128
-
-build\simulation_em.o: src\simulation.c
-	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c src\simulation.c -o build\simulation_em.o  $(EMSFLAGS)  -mavx -msimd128
-
-run: application.exe
-	build\$(APP_NAME).exe
-
-application.exe: increment_version build\application.o build\window.o build\simulation.o 
-	gcc $(CFLAGS) -o build\$(APP_NAME).exe build\window.o build\simulation.o build\application.o -L.\dependencies\lib -lgdi32 -lSDL2 -lSDL2_ttf -lm -lSDL2_image
-	
 # clang -target x86_64-pc-windows-gnu
 
-build\application.o: src\application.c
-	gcc $(CFLAGS) -c src\application.c -o build\application.o $(DEFINES)
+# For application.c – applying extra defines
+$(BUILDDIR)/application.o: $(SRCDIR)/application.c
+	gcc $(CFLAGS) -c $< -o $@ $(DEFINES)
 
-build\window.o: src\window.c
-	gcc $(CFLAGS) -c src\window.c -o build\window.o -mavx
+# For window.c – add extra flags (e.g. -mavx)
+$(BUILDDIR)/window.o: $(SRCDIR)/window.c
+	gcc $(CFLAGS) -mavx -c $< -o $@
 
-build\simulation.o: src\simulation.c
-	gcc $(CFLAGS) -c src\simulation.c -o build\simulation.o
+# For simulation.c – default compile
+$(BUILDDIR)/simulation.o: $(SRCDIR)/simulation.c
+	gcc $(CFLAGS) -c $< -o $@
 
+$(BUILDDIR)/terrainGeneration.o: $(SRCDIR)/terrainGeneration.c
+	gcc $(CFLAGS) -c $< -o $@
 
-clean: 
-	cmd //C del build\application.o build\simulation.o build\window.o build\application_em.o build\window_em.o build\simulation_em.o build\Sandbox.exe gmon.out
+$(BUILDDIR)/camera.o: $(SRCDIR)/camera.c
+	gcc $(CFLAGS) -c $< -o $@
+
+# Glad
+$(BUILDDIR)/glad.o: $(DEPDIR)/$(GLAD_SRC)
+	gcc $(CFLAGS) -c $< -o $@
+
+###############################
+# Pattern rules for Emscripten build
+###############################
+
+# For application
+$(BUILDDIR)/application_em.o: $(SRCDIR)/application.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@ $(DEFINES)
+
+# For window – add extra SIMD flags
+$(BUILDDIR)/window_em.o: $(SRCDIR)/window.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -mavx -msimd128 -c $< -o $@
+
+# For simulation – add extra SIMD flags
+$(BUILDDIR)/simulation_em.o: $(SRCDIR)/simulation.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -mavx -msimd128 -c $< -o $@
+
+$(BUILDDIR)/terrainGeneration_em.o: $(SRCDIR)/terrainGeneration.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/camera_em.o: $(SRCDIR)/camera.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@
+
+# Glad for emscripten
+$(BUILDDIR)/glad_em.o: $(DEPDIR)/$(GLAD_SRC)
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@
+
+###############################
+# Main targets
+###############################
+
+# Default target: build native executable and emscripten version
+all: application.exe emscripten
+
+# Native linking
+application.exe: increment_version $(NATIVE_OBJS) $(GLAD_OBJ)
+	gcc $(CFLAGS) -o $(BUILDDIR)/$(APP_NAME).exe $(NATIVE_OBJS) $(GLAD_OBJ) $(LFLAGS)
+
+# Emscripten linking & packaging
+emscripten: $(EM_OBJS) $(GLAD_EM_OBJ)
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -o application.js $(GLAD_EM_OBJ) $(EM_OBJS) $(EMSFLAGS) --preload-file Resources --preload-file src/shaders
+
+# Shortcut to run native application
+run: application.exe
+	$(BUILDDIR)/$(APP_NAME).exe
+
+# Clean build artifacts
+clean:
+	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.exe gmon.out

@@ -5,8 +5,8 @@
 #include <stdio.h> //sprintf()
 
 
-#define PROFILE_MAX_NAME (100)
-#define PROFILE_MAX_PROFILES (50)
+#define PROFILE_MAX_NAME (100) //Max length of a profile name
+#define PROFILE_MAX_PROFILES (50) //Max number of profiles
 
 #define MAX(a,b)              \
 ({                            \
@@ -26,13 +26,13 @@
 #define TIMETYPE double //The type of TIMESAMPLE
 
 typedef struct{
-    char id[PROFILE_MAX_NAME];
-    uint8_t initialized;
-    uint32_t numberOfCalls;
-    TIMETYPE lowTime;
-    TIMETYPE avgTime;
-    TIMETYPE highTime;
-    TIMETYPE totalTime;
+    char id[PROFILE_MAX_NAME]; //Name of profile
+    uint8_t initialized; //If profile has been initialized
+    uint32_t numberOfCalls; //Times profiled
+    TIMETYPE lowTime;    //Shortest time for profile to run
+    TIMETYPE avgTime;    //Average time for profile to run
+    TIMETYPE highTime;   //Longest time for profile to run
+    TIMETYPE totalTime;  //Total time profile has ran
 }profile_t;
 
 struct{
@@ -42,21 +42,24 @@ struct{
     profile_t profiles[PROFILE_MAX_PROFILES];
 }css_profile = {
     .counterBase = __COUNTER__,
-    .initialized = 1
+    .initialized = 1,
+    .numberOfProfiles = 0
 };
 
-//If __COUNTER__ Is used in the applicaiton then PROFILE_INIT is needed before any PROFILE() calls.
+//If __COUNTER__ Is used in the application then PROFILE_INIT is needed before any PROFILE() calls.
+//Don't use __COUNTER__ between PROFILE() calls
+//TODO: Add zeroing of __COUNTER__ to first PROFILE() call, use css_profile.initialized to detect and store base in css_profile.counterBase
 #define PROFILE_INIT {css_profile.counterBase = __COUNTER__ ; css_profile.initialized = 1;}
 
 #define PROFILE(func) \
 { \
-        int profIndex =  __COUNTER__ - css_profile.counterBase - 1; \
+        int profIndex =  __COUNTER__ - css_profile.counterBase - 1;  \
         TIMETYPE timeBefore = TIMESAMPLE;                            \
-        func                                                        \
-        TIMETYPE timeDiff = TIMESAMPLE - timeBefore;               \
-        if(!css_profile.profiles[profIndex].initialized)          \
-        {                                                        \
-            if(strlen(#func) < 24)                                \
+        func                                                         \
+        TIMETYPE timeDiff = TIMESAMPLE - timeBefore;                 \
+        if(!css_profile.profiles[profIndex].initialized)             \
+        {                                                            \
+            if(strlen(#func) < 24)                                   \
             {                                                        \
                 sprintf(css_profile.profiles[profIndex].id, #func); \
             }                                                        \

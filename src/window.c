@@ -1,18 +1,20 @@
-#include "../dependencies/include/SDL2/SDL.h"
-#include "../dependencies/include/SDL2/SDL_image.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include "../dependencies/include/SDL2/SDL_ttf.h"
-// #include "../dependencies/include/SDL2/SDL_syswm.h"
 #include <math.h> //clampf
 #include <immintrin.h> //SIMD stuff
-// #include <avxintrin.h>
+
+#include "../dependencies/include/glad/glad.h"
+
+#define SDL_MAIN_HANDLED
+#include "../dependencies/include/SDL2/SDL.h"
+#include "../dependencies/include/SDL2/SDL_image.h"
+#include "../dependencies/include/SDL2/SDL_ttf.h"
 
 #include "window.h"
 
-
-// -lgdi32 -lSDL2_ttf -lSDL2 -lm -lSDL2_image
+//Build window.c with -mavx 
+//Link with -lgdi32 -lSDL2_ttf -lSDL2 -lm -lSDL2_image
 
 // Static variable
 const Uint8 *keyboardState; // pointer to key states
@@ -22,8 +24,8 @@ static char *getMouseStateString(void);
 
 #define WINDOW_DEFAULT_W 800
 #define WINDOW_DEFAULT_H 600
-#define WINDOW_DEFAULT_X 100
-#define WINDOW_DEFAULT_Y 100
+#define WINDOW_DEFAULT_X SDL_WINDOWPOS_CENTERED
+#define WINDOW_DEFAULT_Y SDL_WINDOWPOS_CENTERED
 #define WINDOW_DEFAULT_TITLE "Default title"
 
 // window default values
@@ -34,23 +36,12 @@ Window window = {
 	.size.h = WINDOW_DEFAULT_H,
 	.drawSize.w = WINDOW_DEFAULT_W,
 	.drawSize.h = WINDOW_DEFAULT_H,
-	.title = WINDOW_DEFAULT_TITLE};
+	.title = WINDOW_DEFAULT_TITLE
+	};
 
 Window oldWindow; // Copy of window, used to compare against to detect changes in settings
 
-#define IMAGE_MAX_W (4000)
-#define IMAGE_MAX_H (4000)
 
-typedef struct
-{
-	argb_t *color;
-	int w;
-	int h;
-	int pitch;
-} Image;
-
-Image screen;
-Image screenBlurred;
 
 #define ON_RISING_EDGE(bit)                                            \
 	({                                                                 \
@@ -96,6 +87,12 @@ typedef struct
 
 SDL_Window *SDLwindow;
 SDL_Renderer *SDLrenderer;
+SDL_GLContext GLcontext;
+
+GLuint windowShaderProgram; //Used to render framebuffer
+GLuint windowShaderTexture;
+GLuint VAO;
+GLint windowShaderUniformloc;
 
 #define MAX_TEXTURES (3) // Max number of allowed textures
 static struct
@@ -104,20 +101,12 @@ static struct
 	sdlTexture textures[MAX_TEXTURES];
 } textureStorage;
 
-static float clampf(float value, float min, float max);
-static int clampi(int value, int min, int max);
+
 static void windowResized(void);
 static void updateTime(void);
 static sdlTexture createSDLTexture(int width, int height);
 static void updateInput(void);
 void drawText(Layer layer, int xPos, int yPos, char *string);
-
-#define PI 3.14159265358979323846264338327950f
-#define DEG2RAD(x) ((x) * (PI / 180.f))
-#define RAD2DEG(x) ((x) * (180.f / PI))
-
-#define errLog(message) \
-	fprintf(stderr, "File: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
 Layer window_createLayer(void)
 {
@@ -210,22 +199,15 @@ static void updateTime(void)
 
 	// Get dTime and fps with higher precision than 1ms ticks
 	static uint64_t freq = 0;
-	if (!freq)
+	if (!freq){
 		freq = SDL_GetPerformanceFrequency();
+	}
 	static uint64_t oldTime = 0;
 	uint64_t newTime = SDL_GetPerformanceCounter();
 	window.time.dTime = (double)(newTime - oldTime) / (double)freq;
 	oldTime = newTime;
 
-	// fps
-	static uint64_t frameCount = 0;
-	static uint64_t frameCountOld = 0;
-	frameCount++;
-	if (window.time.tick.ms100)
-	{
-		window.time.fps = 0.5 * (double)(frameCount - frameCountOld) * 10.0 + 0.5 * window.time.fps;
-		frameCountOld = frameCount;
-	}
+	window.time.fps = 1.0 / window.time.dTime;
 }
 
 // Check if window settings has changes and handle whatever that change is
@@ -277,18 +259,18 @@ static sdlTexture createSDLTexture(int width, int height)
 {
 
 	sdlTexture texture;
-	texture.texture = SDL_CreateTexture(SDLrenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
-	if (texture.texture == NULL)
-	{
-		errLog(SDL_GetError());
-	}
-	if (textureStorage.noTextures > 0)
-	{
-		if (SDL_SetTextureBlendMode(texture.texture, SDL_BLENDMODE_BLEND) < 0)
-		{ // Only bottom layer texture is opaque
-			errLog(SDL_GetError());
-		}
-	}
+	// texture.texture = SDL_CreateTexture(SDLrenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+	// if (texture.texture == NULL)
+	// {
+	// 	errLog(SDL_GetError());
+	// }
+	// if (textureStorage.noTextures > 0)
+	// {
+	// 	if (SDL_SetTextureBlendMode(texture.texture, SDL_BLENDMODE_BLEND) < 0)
+	// 	{ // Only bottom layer texture is opaque
+	// 		errLog(SDL_GetError());
+	// 	}
+	// }
 	texture.w = width;
 	texture.h = height;
 	texture.pitch = width * sizeof(uint32_t);
@@ -302,27 +284,274 @@ static sdlTexture createSDLTexture(int width, int height)
 }
 
 
+
+Window* window_init()
+{
+
+	// Copy window so we can detect changes after this
+	memcpy(&oldWindow, &window, sizeof(Window));
+
+	if (SDL_Init( SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_SENSOR ) < 0)
+	{
+		errLog(SDL_GetError());
+		return NULL;
+	}
+
+	// CONFIGURE OPENGL ATTRIBUTES USING SDL:
+	// #ifdef __EMSCRIPTEN__
+    	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	// #else
+    	// SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+	// #endif
+    // SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG | SDL_GL_CONTEXT_DEBUG_FLAG);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+	uint32_t flags = SDL_WINDOW_OPENGL;
+	if (window.settings.resizable)
+		flags |= SDL_WINDOW_RESIZABLE;
+	if (window.settings.borderLess)
+		flags |= SDL_WINDOW_BORDERLESS;
+	if (window.settings.fullScreen)
+		flags |= SDL_WINDOW_FULLSCREEN;
+	if (window.settings.maximized)
+		flags |= SDL_WINDOW_MAXIMIZED;
+	if (window.settings.minimized)
+		flags |= SDL_WINDOW_MINIMIZED;
+		
+
+	SDLwindow = SDL_CreateWindow(window.title, window.pos.x, window.pos.y, window.size.w, window.size.h, flags);
+	if (SDLwindow == NULL)
+	{
+		errLog(SDL_GetError());
+		return NULL;
+	}
+
+    //Create GL context
+    GLcontext = SDL_GL_CreateContext(SDLwindow);
+    if(GLcontext == NULL) {
+		errLog(SDL_GetError());
+		return NULL;
+    }
+
+    //Make GL context current
+	SDL_GL_MakeCurrent(SDLwindow, GLcontext);
+
+	// Disable vsync
+	SDL_GL_SetSwapInterval(window.settings.vSync ? 1 : 0);
+
+    // INITIALIZE GLAD FOR GLES:
+    if (!gladLoadGLES2Loader((GLADloadproc)SDL_GL_GetProcAddress)) {
+        printf("%s\n","Failed to initialize GLAD");
+    }
+
+   // LOG OPENGL VERSION, VENDOR (IMPLEMENTATION), RENDERER, GLSL, ETC.:
+    printf("OpenGL Version: %d . %d \n",  GLVersion.major, GLVersion.minor);
+    printf("OpenGL Shading Language Version: %s \n",  (char *)glGetString(GL_SHADING_LANGUAGE_VERSION));
+    printf("OpenGL Vendor: %s \n",  (char *)glGetString(GL_VENDOR));
+    printf("OpenGL Renderer: %s \n",  (char *)glGetString(GL_RENDERER));
+
+
+	uint32_t rendererFlags = SDL_RENDERER_ACCELERATED;
+	if (window.settings.vSync)
+		rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
+
+
+	// SDLrenderer = SDL_CreateRenderer(SDLwindow, -1, rendererFlags); 
+	// if (SDLrenderer == NULL)
+	// {
+	// 	errLog(SDL_GetError());
+	// 	return NULL;
+	// }
+
+	// // Set size of SDLrenderer
+	// SDL_RenderSetLogicalSize(SDLrenderer, window.size.w, window.size.h);
+	// // Set blend mode of SDLrenderer
+	// SDL_SetRenderDrawBlendMode(SDLrenderer, SDL_BLENDMODE_BLEND);
+
+	// // Set color of SDLrenderer to black
+	// SDL_SetRenderDrawColor(SDLrenderer, 100, 0, 0, 255);
+	// SDL_RenderClear(SDLrenderer);
+
+
+
+	const char* vertexShaderSource =
+		"#version 300 es\n"
+		"precision mediump float;\n"
+		"\n"
+		"layout (location = 0) in vec3 aPos;\n"
+		"layout (location = 1) in vec2 aTexCoord;\n"
+		"\n"
+		"out vec2 texCoord;\n"
+		"\n"
+		"void main() {\n"
+		"    gl_Position = vec4(aPos, 1.0);\n"
+		"    texCoord = aTexCoord;\n"
+		"}\n";
+
+	
+    //Load and compile vertex shader
+    unsigned int vertexShader;
+    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    GLint vertexSuccess;
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &vertexSuccess);
+    if (!vertexSuccess) {
+        char infoLog[512];
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        printf("Shader compilation failed\n%s\n", infoLog);
+		return 0;
+    }
+
+	const char* fragmentShaderSource =
+		"#version 300 es\n"
+		"precision mediump float;\n"
+		"\n"
+		"in vec2 texCoord;\n"
+		"uniform sampler2D inputDataTexture1;\n"
+		"\n"
+		"out vec4 FragColor;\n"
+		"\n"
+		"void main()\n"
+		"{\n"
+		"    vec2 invertedTexCoords = vec2(texCoord.x, 1.0 - texCoord.y);  // Invert Y coordinate\n"
+		"    FragColor = texture(inputDataTexture1, invertedTexCoords).bgra;  // Fetch the color using inverted coordinates\n"
+		"}\n";
+
+    //Load and compile fragment shader
+    unsigned int fragmentShader;
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+
+    GLint fragmentSuccess;
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &fragmentSuccess);
+    if (!fragmentSuccess) {
+        char infoLog[512];
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        errLog("Shader compilation failed\n%s\n", infoLog);
+		return 0;
+    }
+
+
+    //Compile program
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    GLint programSuccess;
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &programSuccess);
+    if(!programSuccess) {
+        char infoLog[512];
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        errLog("Shader program linking failed\n%s\n", infoLog);
+		return 0;
+    }
+
+    //Clean up shaders
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);  
+
+	windowShaderProgram = shaderProgram;
+	if(windowShaderProgram == 0){
+		errLog("Failed to compile shader");
+	}
+	glGenTextures(1, &windowShaderTexture);
+	glBindTexture(GL_TEXTURE_2D, windowShaderTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, window.drawSize.w, window.drawSize.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);  // No initial data
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		
+	windowShaderUniformloc = glGetUniformLocation(windowShaderProgram, "inputDataTexture1");
+	if (windowShaderUniformloc == -1) {
+		errLog("Uniform '%s' not found in shader.", "inputDataTexture1");
+		return 0;
+	}
+
+	//Define vertices and indices for a fullscreen quad
+	float vertices[] = {
+		1.0f,  1.0f, 0.0f,   1.0f, 1.0f, // top right
+		1.0f, -1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+		-1.0f, -1.0f, 0.0f,   0.0f, 0.0f, // bottom left
+		-1.0f,  1.0f, 0.0f,   0.0f, 1.0f  // top left 
+	};
+
+	unsigned int indices[] = {  // note that we start from 0!
+		0, 1, 3,   // first triangle
+		1, 2, 3    // second triangle
+	};  
+
+	GLuint EBO;
+	GLuint VBO;
+	glGenBuffers(1, &EBO);
+	glGenVertexArrays(1, &VAO);
+	glGenBuffers(1, &VBO);  
+	
+	//Bind vertex array
+	glBindVertexArray(VAO);
+	
+	//Bind vertex buffer
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	//Copy verticies into VBO
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	//Bind element buffer
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	//Copy indices into EBO
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+
+	//Specify the input in the vertex shader
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(0 * sizeof(float)));
+
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0); 
+	glBindVertexArray(0); 
+
+
+	keyboardState = SDL_GetKeyboardState(NULL); // get pointer to key states
+
+	return &window;
+}
+
+
 int window_run(void)
 {
-	SDL_RenderClear(SDLrenderer);
-	// Go through Layers in order they were created and draw on top of each other
-	for (int i = 0; i < textureStorage.noTextures; i++)
-	{
-		if (textureStorage.textures[i].pixels != NULL)
-		{ // Make sure we don't draw anything before lockTexture is run the first time
-			// Copy framebuffer to screen texture
-			memcpy(textureStorage.textures[i].pixels, textureStorage.textures[i].frameBuffer, textureStorage.textures[i].pitch * textureStorage.textures[i].h);
-			// Send texture to GPU
-			SDL_UnlockTexture(textureStorage.textures[i].texture);
-			// Adjust texture to target rectangle (Scale and translate pixels)
-			if (SDL_RenderCopy(SDLrenderer, textureStorage.textures[i].texture, NULL, NULL) < 0)
-			{
-				errLog(SDL_GetError());
-			}
-		}
-	}
-	// Present result on screen
-	SDL_RenderPresent(SDLrenderer);
+	// SDL_RenderClear(SDLrenderer);
+	// // Go through Layers in order they were created and draw on top of each other
+	// for (int i = 0; i < textureStorage.noTextures; i++)
+	// {
+	// 	if (textureStorage.textures[i].pixels != NULL)
+	// 	{ // Make sure we don't draw anything before lockTexture is run the first time
+	// 		// Copy framebuffer to screen texture
+	// 		memcpy(textureStorage.textures[i].pixels, textureStorage.textures[i].frameBuffer, textureStorage.textures[i].pitch * textureStorage.textures[i].h);
+	// 		// Send texture to GPU
+	// 		SDL_UnlockTexture(textureStorage.textures[i].texture);
+	// 		// Adjust texture to target rectangle (Scale and translate pixels)
+	// 		if (SDL_RenderCopy(SDLrenderer, textureStorage.textures[i].texture, NULL, NULL) < 0)
+	// 		{
+	// 			errLog(SDL_GetError());
+	// 		}
+	// 	}
+	// }
+	// // Present result on screen
+	// SDL_RenderPresent(SDLrenderer);
 	////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////
 	updateTime();
@@ -345,66 +574,48 @@ int window_run(void)
 	/////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////
 	// Lock texture and get a new pixel pointer
-	for (int i = 0; i < textureStorage.noTextures; i++)
-	{
-		if (SDL_LockTexture(textureStorage.textures[i].texture, NULL, &textureStorage.textures[i].pixels, &textureStorage.textures[i].pitch) < 0)
-		{
-			errLog(SDL_GetError());
-		}
-	}
+	// for (int i = 0; i < textureStorage.noTextures; i++)
+	// {
+	// 	if (SDL_LockTexture(textureStorage.textures[i].texture, NULL, &textureStorage.textures[i].pixels, &textureStorage.textures[i].pitch) < 0)
+	// 	{
+	// 		errLog(SDL_GetError());
+	// 	}
+	// }
+
+
+	//Select shader
+	glUseProgram(windowShaderProgram);
+
+	//Select framebuffer to render to screen
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	//Set size of rendering target
+	glViewport(0, 0, window.size.w, window.size.h); 
+
+	//Select the vertex array containing the fullscreen quad
+	glBindVertexArray(VAO); 
+	
+	//Bind input textures to shader
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, windowShaderTexture);
+
+	//Update texture data
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, textureStorage.textures[0].w, textureStorage.textures[0].h, GL_RGBA, GL_UNSIGNED_BYTE, textureStorage.textures[0].frameBuffer);
+
+	
+
+	glUniform1i(windowShaderUniformloc, 0);
+	
+
+	//Render to the fullsreen quad
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    SDL_GL_SwapWindow(SDLwindow);
+
 	return true;
 }
 
-Window *window_init()
-{
 
-	// Copy window so we can detect changes after this
-	memcpy(&oldWindow, &window, sizeof(Window));
-
-	if (SDL_Init( SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER | SDL_INIT_SENSOR ) < 0)
-	{
-		errLog(SDL_GetError());
-		return NULL;
-	}
-	uint32_t flags = 0;
-	if (window.settings.resizable)
-		flags |= SDL_WINDOW_RESIZABLE;
-	if (window.settings.borderLess)
-		flags |= SDL_WINDOW_BORDERLESS;
-	if (window.settings.fullScreen)
-		flags |= SDL_WINDOW_FULLSCREEN;
-	if (window.settings.maximized)
-		flags |= SDL_WINDOW_MAXIMIZED;
-	if (window.settings.minimized)
-		flags |= SDL_WINDOW_MINIMIZED;
-
-	SDLwindow = SDL_CreateWindow(window.title, window.pos.x, window.pos.y, window.size.w, window.size.h, flags);
-	if (SDLwindow == NULL)
-	{
-		errLog(SDL_GetError());
-		return NULL;
-	}
-
-	SDLrenderer = SDL_CreateRenderer(SDLwindow, -1, SDL_RENDERER_PRESENTVSYNC );
-	if (SDLrenderer == NULL)
-	{
-		errLog(SDL_GetError());
-		return NULL;
-	}
-
-	// Set size of SDLrenderer
-	SDL_RenderSetLogicalSize(SDLrenderer, window.size.w, window.size.h);
-	// Set blend mode of SDLrenderer
-	SDL_SetRenderDrawBlendMode(SDLrenderer, SDL_BLENDMODE_BLEND);
-
-	// Set color of SDLrenderer to black
-	SDL_SetRenderDrawColor(SDLrenderer, 100, 0, 0, 255);
-	SDL_RenderClear(SDLrenderer);
-
-	keyboardState = SDL_GetKeyboardState(NULL); // get pointer to key states
-
-	return &window;
-}
 
 void updateKeyState(enum KeyState *keyState, int scanCode)
 {
@@ -454,68 +665,68 @@ static void updateInput(void)
 			switch (event.window.event)
 			{
 			case SDL_WINDOWEVENT_SHOWN:
-				SDL_Log("Window %d shown", event.window.windowID);
+				// SDL_Log("Window %d shown", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_HIDDEN:
-				SDL_Log("Window %d hidden", event.window.windowID);
+				// SDL_Log("Window %d hidden", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_EXPOSED:
-				SDL_Log("Window %d exposed", event.window.windowID);
+				// SDL_Log("Window %d exposed", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_MOVED:
-				SDL_Log("Window %d moved to %d,%d",
-						event.window.windowID, event.window.data1,
-						event.window.data2);
+				// SDL_Log("Window %d moved to %d,%d",
+				// 		event.window.windowID, event.window.data1,
+				// 		event.window.data2);
 				break;
 			case SDL_WINDOWEVENT_RESIZED:
-				SDL_Log("Window %d resized to %dx%d",
-						event.window.windowID, event.window.data1,
-						event.window.data2);
+				// SDL_Log("Window %d resized to %dx%d",
+				// 		event.window.windowID, event.window.data1,
+				// 		event.window.data2);
 				break;
 			case SDL_WINDOWEVENT_SIZE_CHANGED:
-				SDL_Log("Window %d size changed to %dx%d",
-						event.window.windowID, event.window.data1,
-						event.window.data2);
+				// SDL_Log("Window %d size changed to %dx%d",
+				// 		event.window.windowID, event.window.data1,
+				// 		event.window.data2);
 				break;
 			case SDL_WINDOWEVENT_MINIMIZED:
-				SDL_Log("Window %d minimized", event.window.windowID);
+				// SDL_Log("Window %d minimized", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_MAXIMIZED:
-				SDL_Log("Window %d maximized", event.window.windowID);
+				// SDL_Log("Window %d maximized", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_RESTORED:
-				SDL_Log("Window %d restored", event.window.windowID);
+				// SDL_Log("Window %d restored", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_ENTER:
-				SDL_Log("Mouse entered window %d",
-						event.window.windowID);
+				// SDL_Log("Mouse entered window %d",
+				// 		event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_LEAVE:
-				SDL_Log("Mouse left window %d", event.window.windowID);
+				// SDL_Log("Mouse left window %d", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_FOCUS_GAINED:
-				SDL_Log("Window %d gained keyboard focus",
-						event.window.windowID);
+				// SDL_Log("Window %d gained keyboard focus",
+				// 		event.window.windowID);
 
 				break;
 			case SDL_WINDOWEVENT_FOCUS_LOST:
-				SDL_Log("Window %d lost keyboard focus",
-						event.window.windowID);
+				// SDL_Log("Window %d lost keyboard focus",
+				// 		event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_CLOSE:
-				SDL_Log("Window %d closed", event.window.windowID);
+				// SDL_Log("Window %d closed", event.window.windowID);
 				break;
 #if SDL_VERSION_ATLEAST(2, 0, 5)
 			case SDL_WINDOWEVENT_TAKE_FOCUS:
-				SDL_Log("Window %d is offered a focus", event.window.windowID);
+				// SDL_Log("Window %d is offered a focus", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_HIT_TEST:
-				SDL_Log("Window %d has a special hit test", event.window.windowID);
+				// SDL_Log("Window %d has a special hit test", event.window.windowID);
 				break;
 #endif
 			default:
-				SDL_Log("Window %d got unknown event %d",
-						event.window.windowID, event.window.event);
+				// SDL_Log("Window %d got unknown event %d",
+				// 		event.window.windowID, event.window.event);
 				break;
 			}
 			break;
@@ -802,14 +1013,6 @@ void gaussBlurf(float *source, float *target,int source_lenght, int w, int h, in
 
 
 
-//Normalize given vector
-inline vec2f_t normalizeVec2f(vec2f_t vector){
-	float length = sqrtf(vector.x * vector.x + vector.y * vector.y);
-	vector.x /= length;
-	vector.y /= length;
-	return vector;
-}
-
 
 void drawPoint(Layer layer, int x, int y, argb_t color){
 	if(x >= layer.w || x < 0 || y >= layer.h || y < 0){
@@ -839,14 +1042,14 @@ void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t co
 	int outOfBounds = 0; //If both point are outside bounds we return from this funciton before drawing anything
 	if(xStart >= layer.w || xStart < 0 || yStart >= layer.h || yStart < 0){
 		// errLog(printfLocal("(%d,%d) Out of bounds", xStart, yStart));
-		xStart = clampf(xStart, 0, layer.w-1);
-		yStart = clampf(yStart, 0, layer.h-1);
+		xStart = clampi(xStart, 0, layer.w-1);
+		yStart = clampi(yStart, 0, layer.h-1);
 		outOfBounds++;
 	}
 	if(xEnd >= layer.w || xEnd < 0 || yEnd >= layer.h || yEnd < 0){
 		// errLog(printfLocal("(%d,%d) Out of bounds", xStart, yStart));
-		xEnd = clampf(xEnd, 0, layer.w-1);
-		yEnd = clampf(yEnd, 0, layer.h-1);
+		xEnd = clampi(xEnd, 0, layer.w-1);
+		yEnd = clampi(yEnd, 0, layer.h-1);
 		outOfBounds++;
 	}
 	if(outOfBounds >= 2) return;
@@ -877,17 +1080,6 @@ void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t co
 	}
 }
 
-
-static float clampf(float value, float min, float max) {
-    const float t = (value < min) ? min : value;
-    return (t > max) ? max : t;
-}
-
-
-static int clampi(int value, int min, int max) {
-    const int t = (value < min) ? min : value;
-    return (t > max) ? max : t;
-}
 
 argb_t argbAdd1(argb_t color1, argb_t color2){
 	argb_t result_color;
@@ -1160,3 +1352,463 @@ void gaussBlurargb(argb_t *source, argb_t *target,int source_lenght, int w, int 
     boxBlurargb(source, target, source_lenght, w, h, (int)((bxs[2]-1)/2.f));
 }
 
+
+//Vector stuff
+
+//Normalize given vector
+vec2f_t normalizeVec2f(vec2f_t vector){
+	float length = sqrtf(vector.x * vector.x + vector.y * vector.y);
+	vector.x /= length;
+	vector.y /= length;
+	return vector;
+}
+
+//Normalize given vector
+vec3f_t normalizeVec3f(vec3f_t vector){
+	float length = sqrtf(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z);
+	vector.x /= length;
+	vector.y /= length;
+	vector.z /= length;
+	return vector;
+}
+
+
+float dotProduct(vec3f_t v0, vec3f_t v1) {
+    return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
+}
+
+vec3f_t crossProduct(vec3f_t v0, vec3f_t v1){
+	vec3f_t resultVec;
+	resultVec.x = v0.y * v1.z - v0.z * v1.y;
+    resultVec.y = v0.z * v1.x - v0.x * v1.z;
+    resultVec.z = v0.x * v1.y - v0.y * v1.x;
+	return resultVec;
+}
+
+
+
+
+// Function to read the shader source code from a file
+char* readShaderSource(const char* filePath) {
+    FILE* file = fopen(filePath, "r");
+    if (!file) {
+        errLog("Failed to open shader file: %s\n", filePath);
+        return NULL;
+    }
+
+ 	//Get length of file
+    fseek(file, 0, SEEK_END);
+    int fileLength = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+	// Allocate memory for the shader source code
+    char* buffer = (char*)calloc(fileLength, sizeof(char));
+    if (!buffer) {
+        errLog("Failed to allocate memory for shader source\n");
+		return NULL;
+    }
+
+    //Read file to buffer
+    char chr;
+    int len = 0;
+    do{
+        chr = fgetc(file);
+        buffer[len++] = chr;
+    }while(chr != EOF);
+
+    //Add null termination to buffer for use as c string
+    buffer[len-1] = '\0';
+
+    fclose(file);
+    return buffer;
+}
+
+uint32_t compileShaderProgram(char* vertexShaderPath, char* fragmentShaderPath){
+
+    //Load shader source from path
+    const char* vertexShaderSource = readShaderSource(vertexShaderPath);
+	if(vertexShaderSource == NULL){
+		return 0;
+	}
+	
+    //Load and compile vertex shader
+    unsigned int vertexShader;
+    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+
+    GLint vertexSuccess;
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &vertexSuccess);
+    if (!vertexSuccess) {
+        char infoLog[512];
+        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+        printf("Shader compilation failed\n%s\n", infoLog);
+		return 0;
+    }
+
+	//Load shader source from path
+    const char* fragmentShaderSource = readShaderSource(fragmentShaderPath);
+
+    //Load and compile fragment shader
+    unsigned int fragmentShader;
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+
+    GLint fragmentSuccess;
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &fragmentSuccess);
+    if (!fragmentSuccess) {
+        char infoLog[512];
+        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+        errLog("Shader compilation failed\n%s\n", infoLog);
+		return 0;
+    }
+
+
+    //Compile program
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+
+    GLint programSuccess;
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &programSuccess);
+    if(!programSuccess) {
+        char infoLog[512];
+        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+        errLog("Shader program linking failed\n%s\n", infoLog);
+		return 0;
+    }
+
+    //Clean up shaders
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);  
+    free((char*)vertexShaderSource);
+    free((char*)fragmentShaderSource);
+
+
+    return  shaderProgram;
+}
+
+
+int setUniform(GLuint program, UniformType type, char* name, void* dataPtr){
+	
+	static struct{
+		int noUniforms;
+		struct{
+			uint64_t hash;
+			GLint location;
+		}uniform[32];
+	}cache;
+
+	//Look in cache for uniform location
+	GLint location = -1;
+	uint64_t hash = (uint64_t)program ^ (uint64_t)type ^ (uint64_t)name; 
+	for(int i = 0; i < cache.noUniforms; i++){
+		if(hash == cache.uniform[i].hash){
+			location = cache.uniform[i].location;
+			break;
+		}
+	}
+
+	//If no cached location is found, get one and cache it
+	if(location == -1){
+		//Get uniform location
+		GLint loc = glGetUniformLocation(program, name);
+		if (loc == -1) {
+			errLog("Uniform '%s' not found in shader.", name);
+			return 0;
+		}else{
+			cache.uniform[cache.noUniforms].location = loc;
+			cache.uniform[cache.noUniforms].hash = (uint64_t)program ^ (uint64_t)type ^ (uint64_t)name; 
+			cache.noUniforms++;
+		}
+	}
+
+
+
+	
+	switch (type) {
+		case eUNIFROMTYPE_FLOAT:
+		{
+			float v1 = *(float*)(dataPtr);
+			glUniform1f(location, v1);
+		}	break;
+		case eUNIFROMTYPE_FLOAT_VEC2:
+		{
+			vec2f_t v1 = *(vec2f_t*)(dataPtr);
+			glUniform2f(location, v1.x, v1.y);
+		}	break;
+		case eUNIFROMTYPE_FLOAT_VEC3:
+		{
+			vec3f_t v1 = *(vec3f_t*)(dataPtr);
+			glUniform3f(location, v1.x, v1.y, v1.z);
+		}	break;
+		case eUNIFROMTYPE_INT:
+		{
+			int v1 = *(int*)(dataPtr);
+			glUniform1i(location, v1);
+		}	break;
+		case eUNIFROMTYPE_INT_VEC2:
+		{
+			vec2i_t v1 = *(vec2i_t*)(dataPtr);
+			glUniform2i(location, v1.x, v1.y);
+		}	break;
+		case eUNIFROMTYPE_INT_VEC3:
+		{
+			vec3i_t v1 = *(vec3i_t*)(dataPtr);
+			glUniform3i(location, v1.x, v1.y, v1.z);
+		}	break;
+		default:
+			errLog("Unsupported uniform type for uniform '%s'.", name);
+			return 0;
+	}
+
+
+	return 1;
+}
+
+
+void runShader(Shader* shader){
+
+	static GLenum drawBuffers[16] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 , GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4, GL_COLOR_ATTACHMENT5, GL_COLOR_ATTACHMENT6, GL_COLOR_ATTACHMENT7, GL_COLOR_ATTACHMENT8, GL_COLOR_ATTACHMENT9, GL_COLOR_ATTACHMENT10, GL_COLOR_ATTACHMENT11, GL_COLOR_ATTACHMENT12, GL_COLOR_ATTACHMENT13, GL_COLOR_ATTACHMENT14, GL_COLOR_ATTACHMENT15};
+	
+
+
+
+	switch(shader->state){
+		case eSHADERSTATE_UNINITIALIZED:
+
+
+			shader->program =  compileShaderProgram(shader->vertexShaderSource, shader->fragmentShaderSource);
+			if(shader->program == 0){
+				shader->state = eSHADERSTATE_FAILED;
+				return;
+			}
+
+
+			// //Create texture
+			// glGenTextures(1, &texture1);
+			// glBindTexture(GL_TEXTURE_2D, texture1);
+
+			// //Set texture edge options
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+			// //Set texture scaling options
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+			// stbi_set_flip_vertically_on_load(1);  
+
+			// //Load image file
+			// int imgW;
+			// int imgH;
+			// int noChannels;
+			// unsigned char* data;
+			// data = stbi_load("Resources/container.jpg", &imgW, &imgH, &noChannels, 0);
+			// if(data == NULL){
+			// 	errLog("Failed to load texture");
+			// 	shader->state = eSHADERSTATE_FAILED;
+			// }
+			// //Load image to texture
+			// glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, imgW, imgH, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+
+			// //Generate mipmaps
+			// glGenerateMipmap(GL_TEXTURE_2D);
+
+			// //Clean up image
+			// stbi_image_free(data);
+
+			// //Create texture
+			// glGenTextures(1, &texture2);
+			// glBindTexture(GL_TEXTURE_2D, texture2);
+
+			// //Set texture edge options
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_MIRRORED_REPEAT);
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_MIRRORED_REPEAT);
+			// //Set texture scaling options
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+
+			// data = stbi_load("Resources/awesomeface.png", &imgW, &imgH, &noChannels, 0);
+			// if(data == NULL){
+			// 	errLog("Failed to load texture");
+			// 	shader->state = eSHADERSTATE_FAILED;
+			// }
+			// //Load image to texture
+			// glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, imgW, imgH, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+			// //Generate mipmaps
+			// glGenerateMipmap(GL_TEXTURE_2D);
+
+			// //Clean up image
+			// stbi_image_free(data);
+
+			//Initalize and load input textures
+			for(int i = 0; i < shader->input.no; i++){
+				glGenTextures(1, &(shader->textureIn[i]));
+				glBindTexture(GL_TEXTURE_2D, shader->textureIn[i]);
+				if(shader->type == eSHADERTYPE_FLOAT){
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, shader->width, shader->height, 0, GL_RED, GL_FLOAT, shader->input.data[i].ptr_f);
+				}else{
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, shader->width, shader->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, shader->input.data[i].ptr_argb);
+				}
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				
+			}
+
+			glGenFramebuffers(1, &(shader->fbo));
+			glBindFramebuffer(GL_FRAMEBUFFER, shader->fbo);
+
+			for(int i = 0; i < shader->output.no; i++){
+				//Initialize output texture where result will be stored.
+				glGenTextures(1, &(shader->textureOut[i]));
+				glBindTexture(GL_TEXTURE_2D, shader->textureOut[i]);
+				if(shader->type == eSHADERTYPE_FLOAT){
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, shader->width, shader->height, 0, GL_RED, GL_FLOAT, NULL);  // No initial data
+				}else{
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, shader->width, shader->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);  // No initial data
+				}
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+				//Create a framebuffer that the shader will render to, we will read the result from this framebuffer.
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, shader->textureOut[i], 0);
+				if ( glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+					errLog("framebuffer error: %X \n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
+					shader->state = eSHADERSTATE_FAILED;
+					return;
+				}
+			}
+
+			// Set the list of draw buffers
+			glDrawBuffers(shader->output.no, drawBuffers);
+
+
+
+
+			//Define vertices and indices for a fullscreen quad
+			float vertices[] = {
+				1.0f,  1.0f, 0.0f,   1.0f, 1.0f, // top right
+				1.0f, -1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+				-1.0f, -1.0f, 0.0f,   0.0f, 0.0f, // bottom left
+				-1.0f,  1.0f, 0.0f,   0.0f, 1.0f  // top left 
+			};
+
+			unsigned int indices[] = {  // note that we start from 0!
+				0, 1, 3,   // first triangle
+				1, 2, 3    // second triangle
+			};  
+
+			glGenBuffers(1, &(shader->EBO));
+			glGenVertexArrays(1, &(shader->VAO));
+			glGenBuffers(1, &(shader->VBO));  
+			
+			//Bind vertex array
+			glBindVertexArray(shader->VAO);
+			
+			//Bind vertex buffer
+			glBindBuffer(GL_ARRAY_BUFFER, shader->VBO);
+			//Copy verticies into VBO
+			glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+			//Bind element buffer
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, shader->EBO);
+			//Copy indices into EBO
+			glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+
+			//Specify the input in the vertex shader
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(0 * sizeof(float)));
+
+
+			glEnableVertexAttribArray(1);
+			glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+
+			glBindBuffer(GL_ARRAY_BUFFER, 0); 
+			glBindVertexArray(0); 
+
+
+			shader->state = eSHADERSTATE_INITIALIZED;
+			__attribute__((fallthrough));
+		case eSHADERSTATE_INITIALIZED:
+		{
+
+			//Select shader
+			glUseProgram(shader->program);
+
+			//Select framebuffer to render to
+			glBindFramebuffer(GL_FRAMEBUFFER, shader->fbo);
+
+			// Set the list of draw buffers
+			glDrawBuffers(shader->output.no, drawBuffers);
+
+		    glViewport(0, 0, shader->width, shader->height); //Set width and height of render target (Should be equal to outputData dimensions)
+
+			//Not sure if clearing is needed
+			// glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+			// glClear(GL_COLOR_BUFFER_BIT);
+
+			//Select the vertex array containing the fullscreen quad
+			glBindVertexArray(shader->VAO); 
+			
+			//Bind input textures to shader
+			for(int i = 0; i < shader->input.no; i++){
+				glActiveTexture(GL_TEXTURE0 + i);
+				glBindTexture(GL_TEXTURE_2D, shader->textureIn[i]);
+
+				//Update texture data
+				if(shader->type == eSHADERTYPE_FLOAT){
+					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, shader->width, shader->height, GL_RED, GL_FLOAT, shader->input.data[i].ptr_f);
+				}else{
+					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, shader->width, shader->height, GL_RGBA, GL_UNSIGNED_BYTE, shader->input.data[i].ptr_argb);
+				}
+				
+				setUniform(shader->program, eUNIFROMTYPE_INT, shader->input.data[i].name, &i);
+			}
+
+			//Set uniforms
+			for(int i = 0; i < shader->uniform.no; i++){
+				//The last parameter below just need the pointer, we can use whatever type since it's a union
+				setUniform(shader->program, shader->uniform.data[i].type, shader->uniform.data[i].name, &(shader->uniform.data[i].val_i));
+			}
+
+
+			//Render to the fullsreen quad
+			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+
+			for(int i = 0; i < shader->output.no; i++){
+				glReadBuffer(GL_COLOR_ATTACHMENT0 + i);
+				if(shader->type == eSHADERTYPE_FLOAT){
+					glReadPixels(0, 0, shader->width, shader->height, GL_RED, GL_FLOAT, shader->output.data[i].ptr_f); 
+				}else{
+					glReadPixels(0, 0, shader->width, shader->height, GL_RGBA, GL_UNSIGNED_BYTE, shader->output.data[i].ptr_argb); 
+				}
+			}
+
+
+
+		}	break;
+		case eSHADERSTATE_FAILED:
+		{
+
+			//Check if any errors has occured
+			GLenum error = glGetError();
+			if (error != GL_NO_ERROR) {
+				errLog("OpenGL error: %X", error);
+				shader->state = eSHADERSTATE_FAILED;
+			}
+
+			printf("Shader failed\n");
+			exit(0);
+		}	break;
+	}
+}

@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <math.h>	//sin/cos /M_PI
 #include <string.h> //memcpy
-#include <pthread.h>
-#include <stdatomic.h>
+
+#include "stb_perlin.h"
 
 #ifdef __EMSCRIPTEN__
 	#include <emscripten.h>
@@ -20,9 +20,9 @@
 #include "window.h"
 #include "simulation.h"
 #include "css_profile.h"
+#include "camera.h"
 
-#define STB_PERLIN_IMPLEMENTATION
-#include "stb_perlin.h"
+
 
 #ifndef APP_NAME //These should be defined in the makefile
 	#define APP_NAME "0"
@@ -40,9 +40,6 @@
 
 #define DEG2RAD(x) ((x)*(M_PI/180.f))
 #define RAD2DEG(x) ((x)*(180.f/M_PI))
-
-#define errLog(message) \
-	fprintf(stderr, "\nFile: %s, Function: %s, Line: %d, Note: %s\n", __FILE__, __FUNCTION__, __LINE__, message);
 
 #define DEBUG
 
@@ -80,87 +77,33 @@ struct{
 	argb_t lava;
 	argb_t lavaBright;
 }pallete = {
-	.white.argb   = 0xFFFFFFFF,
-    .black.argb   = 0xFF000000,
-    .gray.argb    = 0xFF303030,
-	.red.argb     = 0xFFFF0000,
-	.orange.argb  = 0xFFFFA500,
-	.green.argb   = 0xFF00FF00,
-	.blue.argb    = 0xFF0000FF,
-	.yellow.argb  = 0xFFFFFF00,
-    .stone      = rgb(61, 53, 51),
-    .waterDark  = rgb(64, 96, 99),
-    .water      = rgb(76, 138, 133),
-    .waterLight = rgb(147, 189, 168),
-    .foam       = rgb(210, 210, 210),
-    .mist       = rgb(235, 233, 236),
-    .sand       = rgb(186, 165, 136),
-    .lava       = rgb(254, 62, 10),
-	.lavaBright = rgb(254, 162, 3)
+	.white        = rgb(255, 255, 255),
+    .black        = rgb(0, 0, 0),
+    .gray         = rgb(48, 48, 48),
+	.red          = rgb(255, 0, 0),
+	.orange       = rgb(255, 165, 0),
+	.green        = rgb(0, 255, 0),
+	.blue         = rgb(0, 0, 255),
+	.yellow       = rgb(255, 255, 0),
+    .stone        = rgb(61, 53, 51),
+    .waterDark    = rgb(64, 96, 99),
+    .water        = rgb(76, 138, 133),
+    .waterLight   = rgb(147, 189, 168),
+    .foam         = rgb(210, 210, 210),
+    .mist         = rgb(235, 233, 236),
+    .sand         = rgb(186, 165, 136),
+    .lava         = rgb(254, 62, 10),
+	.lavaBright   = rgb(254, 162, 3)
 };
 // https://coolors.co/406063-4c8a85-93bda8-baa588-ebe9ec-d2d2d2-3d3533-fe3e0a-fea203
 
 #define MAPW 256
 #define MAPH 256
 
-#define windowSizeX 1024	
-#define windowSizeY 1024
-#define rendererSizeX 1024
-#define rendererSizeY 1024
-
-static inline int maxi(const int a, const int b){
-    return (a > b) ? a : b;
-}
-
-static inline int mini(const int a, const int b)
-{
-    return (a < b) ? a : b;
-}
-
-static inline float maxf(const float a, const float b)
-{
-    return (a > b) ? a : b;
-}
-
-static inline float minf(const float a, const float b)
-{
-    return (a < b) ? a : b;
-}
-
-static inline float clampf(const float value, const float min, const float max) 
-{
-    const float t = value < min ? min : value;
-    return t > max ? max : t;
-}
-
-static inline float cosLerp(const float y1, const float y2, const float mu)
-{
-	const double mu2 = (1-cos(mu*M_PI))/2;
-	return(y1*(1-mu2)+y2*mu2);
-}
-
-static inline float lerp(const float s, const float e, const float t)
-{
-	return s + (e - s) * t;
-}
-
-static inline argb_t lerpargb(const argb_t s, const argb_t e, const float t)
-{
-	argb_t result;
-	result.r = lerp(s.r, e.r, t);
-	result.g = lerp(s.g, e.g, t);
-	result.b = lerp(s.b, e.b, t);
-	return result;
-}
-
-static inline float blerp(const float c00, const float c10, const float c01, const float c11, const float tx, const float ty)
-{
-	//    return lerp(lerp(c00, c10, tx), lerp(c01, c11, tx), ty);
-	const float s = c00 + (c10 - c00) * tx;
-	const float e = c01 + (c11 - c01) * tx;
-	return (s + (e - s) * ty);
-}
-
+#define windowSizeX 512	
+#define windowSizeY 512
+#define rendererSizeX 512
+#define rendererSizeY 512
 
 
 
@@ -204,22 +147,6 @@ struct{
     .limits.radius.min = 5.f
     };
 
-typedef struct{
-	float x, y;
-	float rot;
-	float zoom;
-    struct{
-        float zoomMax;
-        float zoomMin;
-    }limits;
-	enum
-	{
-		NE,
-		SE,
-		SW,
-		NW
-	} direction;
-} camera_t;
 
 camera_t g_cam = {
     .limits.zoomMax = 0.5f,
@@ -227,7 +154,7 @@ camera_t g_cam = {
 };
 
 
-struct{
+typedef struct{
 	int w;
 	int h;
 	float tileWidth; // width of one tile, used for adjusting fluid simulation
@@ -241,7 +168,9 @@ struct{
 	float height[MAPW * MAPH];
 	float stone[MAPW * MAPH];
 	float sand[MAPW * MAPH];
-	fluid_t water[MAPW * MAPH];
+	// fluidSWE_t waterSWE;
+	new_fluid_t water;
+	// fluid_t water[MAPW * MAPH];
 	vec2f_t waterVel[MAPW * MAPH]; // X/Y
 	fluid_t mist[MAPW * MAPH];
 	fluid_t lava[MAPW * MAPH];
@@ -264,7 +193,10 @@ struct{
 		unsigned int updateShadowMap : 1;
 		unsigned int updateColorMap : 1;
 	} flags;
-} map;
+} Map;
+
+
+Map map;
 
 struct{
 	float height[MAPW * MAPH];
@@ -287,8 +219,8 @@ typedef struct{
 TerrainGen terrainGen = {
 	.autoGenerate = 0,
 	.maxHeight = 100.f,
-	.detail = 1.f,
-	.sand = 0.5f,
+	.detail = 0.f,
+	.sand = 0.0f,
 	.x = 0.f,
 	.y = 0.f
 };
@@ -303,11 +235,10 @@ struct{
 	{},{.pos.x = 100, .pos.y = 100, .amount = 1000.f}
 };
 
-
+void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset, int mapW, int mapH, float* stoneMap, float* sandMap);
 
 
 static argb_t getTileColorWater(int x, int y, int ys, vec2f_t upVec, float shade);
-static void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset);
 
 argb_t frameBuffer[rendererSizeX * rendererSizeY];
 argb_t background[rendererSizeX * rendererSizeY]; // Stores background image that get copied to framebuffer at start of render
@@ -322,83 +253,8 @@ float totalLavaLevel;
 Layer botLayer;
 Layer topLayer;
 
-// Define a mutex to synchronize access to the framebuffer
-pthread_mutex_t renderMap_mutex = PTHREAD_MUTEX_INITIALIZER;
-atomic_int renderStep = 0;
 
 
-static vec2f_t world2screen(float x, float y, camera_t camera)
-{
-	float sinAlpha = sinf(camera.rot);
-	float cosAlpha = cosf(camera.rot);
-
-	// scale for zoom level
-	float xs = x / camera.zoom;
-	float ys = y / camera.zoom;
-	// project
-
-	// rotate
-	float xw = cosAlpha * (xs + (camera.x - 614.911f)) + sinAlpha * (ys + (camera.y - 119.936f)) - (camera.x - 614.911f);
-	float yw = -sinAlpha * (xs + (camera.x - 614.911f)) + cosAlpha * (ys + (camera.y - 119.936f)) - (camera.y - 119.936f);
-	// offset for camPtrera position
-
-	xs = xw + camera.x;
-	ys = yw + camera.y;
-
-	xw = ((xs - ys) / sqrtf(2.f));
-	yw = ((xs + ys) / sqrtf(6.f));
-
-	vec2f_t retVal = {xw, yw};
-
-	return retVal;
-}
-
-static vec2f_t screen2world(float x, float y, camera_t camera)
-{
-	float sinAlpha = sinf(camera.rot);
-	float cosAlpha = cosf(camera.rot);
-	float sq2d2 = sqrtf(2.f) / 2.f;
-	float sq6d2 = sqrtf(6.f) / 2.f;
-	// transform screen coordinates to world coordinates
-	float xw = sq2d2 * (float)x + sq6d2 * (float)y;
-	float yw = sq6d2 * (float)y - sq2d2 * (float)x;
-	xw = xw - camera.x;
-	yw = yw - camera.y;
-
-	// rotate view
-	float xwr = cosAlpha * (xw + (camera.x - 614.911f)) - sinAlpha * (yw + (camera.y - 119.936f)) - (camera.x - 614.911f);
-	float ywr = sinAlpha * (xw + (camera.x - 614.911f)) + cosAlpha * (yw + (camera.y - 119.936f)) - (camera.y - 119.936f);
-	// 616 121
-	// apply zoom
-	xw = xwr * camera.zoom;
-	yw = ywr * camera.zoom;
-
-	vec2f_t retVal = {xw, yw};
-	// double xw = (cosAlpha*(cam.x+sq2d2*x+sq6d2*y-Map.w/2) - sinAlpha*(cam.y+sq6d2*y-sq2d2*x-Map.h/2)+Map.w/2)*cam.zoom;
-	// double yw = (sinAlpha*(cam.x+sq2d2*x+sq6d2*y-Map.w/2) + cosAlpha*(cam.y+sq6d2*y-sq2d2*x-Map.h/2)+Map.h/2)*cam.zoom;
-	return retVal;
-}
-
-static void cam_zoom(camera_t* camPtr, float value){
-    		// if (camPtr->zoom > camPtr->limits.zoomMin && camPtr->zoom < camPtr->limits.zoomMax){
-			float rotation = camPtr->rot; // save camera rotation
-			camPtr->rot = 0.f;				 // set camera rotation to 0
-
-			vec2f_t pos1 = screen2world(window.drawSize.w / 2.f, window.drawSize.h / 2.f, g_cam);
-			camPtr->zoom += value * camPtr->zoom * window.time.dTime;
-            camPtr->zoom = clampf(camPtr->zoom, camPtr->limits.zoomMin, camPtr->limits.zoomMax);
-			vec2f_t pos2 = world2screen(pos1.x, pos1.y, g_cam);
-			vec2f_t deltapos = {window.drawSize.w / 2.f - pos2.x, window.drawSize.h / 2.f - pos2.y};
-			// transform coordinate offset to isometric
-			float sq2d2 = sqrtf(2.f) / 2.f;
-			float sq6d2 = sqrtf(6.f) / 2.f;
-			float xw = sq2d2 * deltapos.x + sq6d2 * deltapos.y;
-			float yw = sq6d2 * deltapos.y - sq2d2 * deltapos.x;
-			camPtr->y += yw;
-			camPtr->x += xw;
-			camPtr->rot = rotation; // restore camera rotation
-		// }
-}
 
 void erodeOld()
 {
@@ -788,7 +644,7 @@ void changeMapGenDetail(float detail)
 	terrainGen.detail = detail;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
 	}
 }
 EMSCRIPTEN_KEEPALIVE
@@ -797,13 +653,13 @@ void changeSandHeight(float sand)
 	terrainGen.sand = sand;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
 	}
 }
 EMSCRIPTEN_KEEPALIVE
 void generateMap()
 {
-	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y);
+	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
 }
 EMSCRIPTEN_KEEPALIVE
 void setAutoGenerate(int yesPleaseDoThat)
@@ -818,7 +674,7 @@ void setmapGenX(int x)
 	terrainGen.x = x;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
 	}
 }
 EMSCRIPTEN_KEEPALIVE
@@ -827,7 +683,7 @@ void setmapGenY(int y)
 	terrainGen.y = y;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
 	}
 }
 
@@ -856,7 +712,7 @@ static void updateInput(){
 				case TOOL_WATER:
 					if (r > radius / 4){ continue; } //Fluids need smaller circle or we get a huge area of this fluid
 					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth = maxf(map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+						map.water.depth[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.water.depth[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
                         map.present[cursor.worldX+cursor.worldY*map.w].water = 1;
 					}
 					break;
@@ -881,8 +737,8 @@ static void updateInput(){
 					break;
                 case TOOL_WIND:
 					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].up += 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
-						map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].down -= 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
+						// map.water.up[(cursor.worldX + k) + (cursor.worldY + j) * map.w] += 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
+						// map.water.down[(cursor.worldX + k) + (cursor.worldY + j) * map.w] -= 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
 						map.mist[(cursor.worldX + k) + (cursor.worldY + j) * map.w].up += 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
 						map.mist[(cursor.worldX + k) + (cursor.worldY + j) * map.w].down -= 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
 					}
@@ -923,7 +779,7 @@ static void updateInput(){
 		g_cam.y += cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
 
 		// Print camera pos
-		printf("camera: x:%f y:%f rot:%f zoom:%f", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
+		printf("camera: x:%f y:%f rot:%f zoom:%f\n", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
 	}
 	if (key.S == eKEY_HELD){
 		g_cam.x += sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
@@ -1016,12 +872,32 @@ static void updateInput(){
 
 
 	if (key.K == eKEY_PRESSED){
-		PROFILE(erode();)
+		erode();
 	}
 	if (key.L == eKEY_PRESSED){
 		NEWFEATURE = (NEWFEATURE) ? 0 : 1;
 		printf("NEWFATURE %s\n", NEWFEATURE ? "ON" : "OFF");
 	}
+
+
+	//TODO: Move into some update camera function that only runs when the camera rotation changes
+	if (fabsf(g_cam.rot) < 45.f * M_PI / 180.f || fabsf(g_cam.rot) >= 315.f * M_PI / 180.f)
+	{
+		g_cam.direction = NW;
+	}
+	else if (fabsf(g_cam.rot) < 135.f * M_PI / 180.f)
+	{
+		g_cam.direction = NE;
+	}
+	else if (fabsf(g_cam.rot) < 225.f * M_PI / 180.f)
+	{
+		g_cam.direction = SE;
+	}
+	else if (fabsf(g_cam.rot) < 315.f * M_PI / 180.f)
+	{
+		g_cam.direction = SW;
+	}
+
 }
 
 
@@ -1278,7 +1154,7 @@ static void generateColorMap()
 				slopeVec = normalizeVec2f(slopeVec);
 				
 				float glare = ((slopeVec.x - upVec.x)*(slopeVec.x - upVec.x)+(slopeVec.y - upVec.y)*(slopeVec.y - upVec.y)) * ((x-3) && (y-3) && (x-map.w+3) && (y-map.h+3));
-				if(glare != glare) printf("heh\n");
+				// if(glare != glare) printf("heh\n");
 				glare = minf(glare*0.05f, 1.f);
 
 				argb = lerpargb(argb, pallete.white, glare);
@@ -1300,8 +1176,8 @@ static void generateColorMap()
 				float slopX = (map.height[(x + 1) + (y) * map.w] - map.height[(x - 1) + (y) * map.w]); 
 				float slopY = (map.height[(x) + (y + 1) * map.w] - map.height[(x) + (y - 1) * map.w]);
 
-				argb = lerpargb(argb, pallete.water, minf(map.water[x + mapPitch].depth*0.1f, 1.f));
-				argb = lerpargb(argb, pallete.waterDark, minf(map.water[x + mapPitch].depth*0.05f, 1.f));
+				argb = lerpargb(argb, pallete.water, minf(map.water.depth[x + mapPitch]*0.1f, 1.f));
+				argb = lerpargb(argb, pallete.waterDark, minf(map.water.depth[x + mapPitch]*0.05f, 1.f));
 
 
 				if (map.susSed[x + y * map.w] > 0)
@@ -1311,17 +1187,17 @@ static void generateColorMap()
 					argb.b = lerp(argb.b, pallete.sand.b, minf(map.susSed[x + mapPitch], 0.75f));
 				}
 				
-				// // highligt according to slope
+				// Highlight according to slope
 				vec2f_t slopeVec = {.x = slopX + 0.000000001f, .y = slopY + 0.000000001f}; //The small addition is to prevent normalizing a zero length vector which we don't handle
 				vec2f_t slopeVecNorm = normalizeVec2f(slopeVec);
 				
 				float glare = ((slopeVecNorm.x - upVec.x)*(slopeVecNorm.x - upVec.x)+(slopeVecNorm.y - upVec.y)*(slopeVecNorm.y - upVec.y)) * ((x-3) && (y-3) && (x-map.w+3) && (y-map.h+3)); //The thing at the end with makes it so if the x or y position is on the border then slopX and Y gets multiplied by 0 otherwise by 1
-				if(glare != glare) printf("heh\n");
+				// if(glare != glare) printf("heh\n");
 				glare = minf(glare*0.05f, 1.f);
 
 				argb = lerpargb(argb, pallete.white, glare);
 
-				//I want to give a look where the water normal vector is facing the camera is lighter, unfourtunately this shallow water on slopes to be light as well so I removed it until I have a better solution.
+				// I want to give a look where the water normal vector is facing the camera is lighter, unfortunately this shallow water on slopes to be light as well so I removed it until I have a better solution.
 				// argb = lerpargb(argb, pallete.waterLight, clampf( ((slopeVec.x)*(slopeVec.x)+(slopeVec.y)*(slopeVec.y))  * (0.05f-glare) , 0.f, 1.f));
 				
 				
@@ -1393,11 +1269,48 @@ static void generateColorMap()
 
 
 
-	memcpy(map.argbBuffer, map.argb, sizeof(map.argb));
-	// memcpy(map.argbBlured, map.argbBuffer, sizeof(map.argb));
+	//CPU based blur
+	// if(window.time.tick.ms100)
+	// {
+	// 	memcpy(map.argbBuffer, map.argb, sizeof(map.argb));
+	// 	gaussBlurargb(map.argbBuffer, map.argbBlured, map.w*map.h, map.w, map.h, 10);
+	// }
 	
-	if(window.time.tick.ms100){
-		gaussBlurargb(map.argbBuffer, map.argbBlured, map.w*map.h, map.w, map.h, 10);
+	//GPU blur
+	if(window.time.tick.ms100)
+	{
+		static Shader blurShader = {
+			.state = eSHADERSTATE_UNINITIALIZED,
+			.type = eSHADERTYPE_ARGB,
+			.vertexShaderSource = "src/shaders/shader.vert",
+			.fragmentShaderSource = "src/shaders/blurShader.frag",
+			.width = MAPW,
+			.height = MAPH,
+			.input.no = 1,
+			.input.data[0].name = "inputDataTexture1",
+			.input.data[0].ptr_argb = map.argb,
+			.uniform.no = 3,
+			.uniform.data[0].name = "resolution",
+			.uniform.data[0].type = eUNIFROMTYPE_FLOAT_VEC2,
+			.uniform.data[0].val_vec2f = {MAPW , MAPH},
+			.uniform.data[1].name = "blurDirection",
+			.uniform.data[1].type = eUNIFROMTYPE_INT,
+			.uniform.data[1].val_i = 0,
+			.uniform.data[2].name = "radius",
+			.uniform.data[2].type = eUNIFROMTYPE_INT,
+			.uniform.data[2].val_i = 20,
+			.output.no = 1,
+			.output.data[0].ptr_argb = map.argbBlured
+		};
+
+		//Run blur shader for two passes, use the output as the first as the input for the second, then reset the pointer for next loop
+		blurShader.uniform.data[1].val_i = 0; // Horizontal pass
+		runShader(&blurShader);
+		void* tempPtr = blurShader.input.data[0].ptr_argb;
+		blurShader.input.data[0].ptr_argb = blurShader.output.data[0].ptr_argb;
+		blurShader.uniform.data[1].val_i = 1; //Vertical pass
+		runShader(&blurShader);
+		blurShader.input.data[0].ptr_argb = tempPtr;
 
 	}
 	
@@ -1437,7 +1350,7 @@ static void simulation(float dTime)
             //curl is something, velDiff is speed difference with nearby tiles
 			float curl = map.waterVel[(x+1)+y*map.w].y - map.waterVel[(x-1)+y*map.w].y - map.waterVel[x+(y+1)*map.w].x + map.waterVel[x+(y-1)*map.w].y;
             float velDiff = map.waterVel[x+y*w].x*2 - map.waterVel[(x-1)+(y)*w].x - map.waterVel[(x+1)+(y)*w].x + map.waterVel[x+y*w].y*2 - map.waterVel[x+(y-1)*w].y - map.waterVel[x+(y+1)*w].y;
-            float deltaV = (map.water[(x-1)+(y)*MAPW].right+map.water[(x)+(y+1)*MAPW].down+map.water[(x+1)+(y)*MAPW].left+map.water[(x)+(y-1)*MAPW].up - (map.water[(x)+(y)*MAPW].right+map.water[(x)+(y)*MAPW].down+map.water[(x)+(y)*MAPW].left+map.water[(x)+(y)*MAPW].up));
+            float deltaV = (map.water.flow[(x-1)+(y)*MAPW].right + map.water.flow[(x)+(y+1)*MAPW].down + map.water.flow[(x+1)+(y)*MAPW].left + map.water.flow[(x)+(y-1)*MAPW].up - (map.water.flow[(x)+(y)*MAPW].right + map.water.flow[(x)+(y)*MAPW].down + map.water.flow[(x)+(y)*MAPW].left + map.water.flow[(x)+(y)*MAPW].up));
 
             if(deltaV > 10.f){
                 map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + velDiff * 0.001f * dTime;
@@ -1475,15 +1388,15 @@ static void simulation(float dTime)
 				map.lavaFoamLevel[x+y*w]  = minf(map.lavaFoamLevel[x+y*w], 1000.f);
 				map.lavaFoamLevel[x+y*w] -= minf(map.lavaFoamLevel[x+y*w], 0.01f * dTime);
 
-				if(map.water[x+y*w].depth > 0.f){
-					lavaConverted = minf(minf(map.lava[x+y*w].depth, map.water[x+y*w].depth), 2.f * dTime);
+				if(map.water.depth[x+y*w] > 0.f){
+					lavaConverted = minf(minf(map.lava[x+y*w].depth, map.water.depth[x+y*w]), 2.f * dTime);
 					map.lava[x+y*w].depth  -= lavaConverted; 
 					map.stone[x+y*w]       += lavaConverted;
-					map.water[x+y*w].depth -= lavaConverted * 1.f; 
-					map.water[x+y*w].down  -= lavaConverted * 1.f; 
-					map.water[x+y*w].up    -= lavaConverted * 1.f; 
-					map.water[x+y*w].left  -= lavaConverted * 1.f; 
-					map.water[x+y*w].right -= lavaConverted * 1.f; 
+					map.water.depth[x+y*w] -= lavaConverted * 1.f; 
+					map.water.flow[x+y*w].down  -= lavaConverted * 1.f; 
+					map.water.flow[x+y*w].up    -= lavaConverted * 1.f; 
+					map.water.flow[x+y*w].left  -= lavaConverted * 1.f; 
+					map.water.flow[x+y*w].right -= lavaConverted * 1.f; 
 					map.mist[x+y*w].depth  += lavaConverted * 4.f; 
 					// map.mist[x+y*w].down   += lavaConverted * 5.f; 
 					// map.mist[x+y*w].up     += lavaConverted * 5.f; 
@@ -1545,40 +1458,58 @@ static void simulation(float dTime)
     }
 
 
-    PROFILE(simFluid(map.water, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.97f, minf(dTime*program.simSpeed, 0.13f));)
+	static uint32_t delay = 100;
+	delay += mouse.dWheel;
+	if(key.V){
+		static float var = 1;
+		for(uint32_t i=0;i<delay;i++){
+			var = powf(var, var);
+			// printf("%d %f\n",delay,var);
+		}
+	}
 
+	for(int i=0;i<1;i++){
+		// simFluidSWE(&(map.waterSWE), map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.90f, 0.01f /*minf(dTime*program.simSpeed, 0.13f)*/);
 
+	}
+	if(key.Y){
+		simFluidGPU(&(map.water), map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.98f, 0.02f /*minf(dTime*program.simSpeed, 0.13f)*/);
+	}else{
+    	simFluidBackup(&(map.water), map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.98f, 0.02f /*minf(dTime*program.simSpeed, 0.13f)*/);
+	}
+
+	// memcpy(map.water.depth, map.waterSWE.depth, sizeof(float)*map.w*map.h);
 
 	//Handle border conditions of fluids
 	for (int y = 0; y < h; y++)
 	{
-		map.water[3 + y * w].depth += map.water[2 + y * w].depth;
-		map.water[2 + y * w].depth = 0.f;
-		map.water[2 + y * w].right += map.water[3 + y * w].left;
-		map.water[3 + y * w].left = 0.f;
-		map.water[(w - 3) + y * w].depth += map.water[(w - 2) + y * w].depth;
-		map.water[(w - 2) + y * w].depth = 0.f;
-		map.water[(w - 2) + y * w].left += map.water[(w - 3) + y * w].right;
-		map.water[(w - 3) + y * w].right = 0.f;
+		map.water.depth[3 + y * w] += map.water.depth[2 + y * w];
+		map.water.depth[2 + y * w] = 0.f;
+		map.water.flow[2 + y * w].right += map.water.flow[3 + y * w].left;
+		map.water.flow[3 + y * w].left = 0.f;
+		map.water.depth[(w - 3) + y * w] += map.water.depth[(w - 2) + y * w];
+		map.water.depth[(w - 2) + y * w] = 0.f;
+		map.water.flow[(w - 2) + y * w].left += map.water.flow[(w - 3) + y * w].right;
+		map.water.flow[(w - 3) + y * w].right = 0.f;
 		
 	}
 	for (int x = 0; x < w; x++)
 	{
-		map.water[x + 3 * w].depth += map.water[x + 2 * w].depth;
-		map.water[x + 2 * w].depth = 0.f;
-		map.water[x + 2 * w].up += map.water[x + 3 * w].down;
-		map.water[x + 3 * w].down = 0;
-		map.water[x + (h - 3) * w].depth += map.water[x + (h - 2) * w].depth;
-		map.water[x + (h - 2) * w].depth = 0.f;
-		map.water[x + (h - 2) * w].down += map.water[x + (h - 3) * w].up;
-		map.water[x + (h - 3) * w].up = 0.f;
+		map.water.depth[x + 3 * w] += map.water.depth[x + 2 * w];
+		map.water.depth[x + 2 * w] = 0.f;
+		map.water.flow[x + 2 * w].up += map.water.flow[x + 3 * w].down;
+		map.water.flow[x + 3 * w].down = 0;
+		map.water.depth[x + (h - 3) * w] += map.water.depth[x + (h - 2) * w];
+		map.water.depth[x + (h - 2) * w] = 0.f;
+		map.water.flow[x + (h - 2) * w].down += map.water.flow[x + (h - 3) * w].up;
+		map.water.flow[x + (h - 3) * w].up = 0.f;
 	}
 
 
     //Add water to height
     for(int y=0;y<h;y++){
         for(int x=0;x<w;x++){
-            map.height[x + y * w] += map.water[x + y * w].depth;
+            map.height[x + y * w] += map.water.depth[x + y * w];
         }
     }
 
@@ -1614,13 +1545,13 @@ static void simulation(float dTime)
     for(int y=4;y<h-5;y++){
         for(int x=4;x<w-5;x++){
             // calculate velocity
-            map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left); // X
-            map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up);       // Y
+            // map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left); // X
+            // map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up);       // Y
 
 			map.lavaVel[x + y * w].x = (map.lava[(x - 1) + (y)*w].right - map.lava[(x) + (y)*w].left + map.lava[(x) + (y)*w].right - map.lava[(x + 1) + (y)*w].left) / (32.f); // X
             map.lavaVel[x + y * w].y = (map.lava[(x) + (y - 1)*w].down - map.lava[(x) + (y)*w].up + map.lava[(x) + (y)*w].down - map.lava[(x) + (y + 1)*w].up) / (32.f);       // Y
 
-            map.present[x + y * w].water = (map.water[x + y * w].depth > 0.01f) ? 1 : 0;
+            map.present[x + y * w].water = (map.water.depth[x + y * w] > 0.01f) ? 1 : 0;
             map.present[x + y * w].mist  = (map.mist[x + y * w].depth > 0.01f) ? 1 : 0;
             map.present[x + y * w].lava  = (map.lava[x + y * w].depth > 0.01f) ? 1 : 0;
         }
@@ -1628,7 +1559,7 @@ static void simulation(float dTime)
 
 
     
-    PROFILE(erodeAndDeposit(map.sand, map.susSed, map.stone, map.water, map.waterVel, w, h);)
+    // PROFILE(erodeAndDeposit(map.sand, map.susSed, map.stone, map.water, map.waterVel, w, h);)
     PROFILE(relax(map.sand, map.stone, 40.f, 9.81f, w, h, minf(dTime*program.simSpeed, 0.13f)); )
     PROFILE(advect(map.susSed, map.susSed2, map.waterVel, w, h, minf(dTime*program.simSpeed, 0.13f));)
 
@@ -1658,7 +1589,7 @@ static void simulation(float dTime)
 	//Count total amount of water
 	totalWaterLevel = 0.f;
     for(int i = 0; i < w*h; i++){
-        totalWaterLevel += map.water[i].depth;
+        totalWaterLevel += map.water.depth[i];
     }
 #endif /*DEBUG*/
 
@@ -1783,7 +1714,7 @@ static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, fl
 		// and the border thing makes it so it only jumps one pixel when there is a
 		// new tile and the next drawing part is darker, thus making the edge of the tile darker
 		if (!border)
-		{ //! border
+		{
 			border = 1;
 			float testX, testY;
 			switch (camera.direction)
@@ -1831,7 +1762,7 @@ static void render()
 	clearLayer(botLayer);
 	clearLayer(topLayer);
 
-	drawText(topLayer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
+	// drawText(topLayer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
 
 	
 
@@ -1839,14 +1770,14 @@ static void render()
 #ifdef DEBUG
     int cwx = clampf(cursor.worldX, 0, map.w);
     int cwy = clampf(cursor.worldY, 0, map.h);
-	drawText(topLayer, 10, 30,  printfLocal("Mouse: %d, %d | %d, %d | zoom: %f", mouse.pos.x, mouse.pos.y, cwx, cwy, g_cam.zoom) );
-	drawText(topLayer, 10, 50,  printfLocal("Shadow: %f", map.shadow[cwx+cwy*map.w]));
-	drawText(topLayer, 10, 70,  printfLocal("foam: %f total: %f", map.foamLevel[cwx+cwy*map.w], totalFoamLevel));
-	drawText(topLayer, 10, 90,  printfLocal("Stone: %f total: %f", map.stone[cwx+cwy*map.w], totalStoneLevel));
-	drawText(topLayer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*map.w], totalSandLevel));
-    drawText(topLayer, 10, 130, printfLocal("Water: %f total: %f", map.water[cwx+cwy*map.w].depth, totalWaterLevel));
-    drawText(topLayer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*map.w].depth, totalMistLevel));
-	drawText(topLayer, 10, 170,  printfLocal("waterVel: %f, %f", map.waterVel[cwx+cwy*map.w].x, map.waterVel[cwx+cwy*map.w].y));
+	// drawText(topLayer, 10, 30,  printfLocal("Mouse: %d, %d | %d, %d | zoom: %f", mouse.pos.x, mouse.pos.y, cwx, cwy, g_cam.zoom) );
+	// drawText(topLayer, 10, 50,  printfLocal("Shadow: %f", map.shadow[cwx+cwy*map.w]));
+	// drawText(topLayer, 10, 70,  printfLocal("foam: %f total: %f", map.foamLevel[cwx+cwy*map.w], totalFoamLevel));
+	// drawText(topLayer, 10, 90,  printfLocal("Stone: %f total: %f", map.stone[cwx+cwy*map.w], totalStoneLevel));
+	// drawText(topLayer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*map.w], totalSandLevel));
+    // drawText(topLayer, 10, 130, printfLocal("Water: %f total: %f", map.water[cwx+cwy*map.w].depth, totalWaterLevel));
+    // drawText(topLayer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*map.w].depth, totalMistLevel));
+	// drawText(topLayer, 10, 170,  printfLocal("waterVel: %f, %f", map.waterVel[cwx+cwy*map.w].x, map.waterVel[cwx+cwy*map.w].y));
 
     //Draw water is present data
 	// for (int y = 0; y < map.h; y++)
@@ -1901,7 +1832,7 @@ static void render()
 			int x = foamSpawner[i].pos.x;
 			int y = foamSpawner[i].pos.y;
 			vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-			sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)  / (sqrtf(2.f) * g_cam.zoom);
+			sPos.y = sPos.y - (map.height[x+y*map.w] + map.water.depth[x+y*map.w])  / (sqrtf(2.f) * g_cam.zoom);
 			drawSquare(topLayer, sPos.x - 1, sPos.y - 1, 2, 2, pallete.red);
 		}
 	}
@@ -2022,7 +1953,7 @@ static void render()
 
 		vec2f_t worldCoord = screen2world(x, botMostYCoord, cam);
 
-		PROFILE(renderColumn(x, botMostYCoord, topMostYCoord, upVec, worldCoord.x, worldCoord.y, dDxw, dDyw, cam);)
+		renderColumn(x, botMostYCoord, topMostYCoord, upVec, worldCoord.x, worldCoord.y, dDxw, dDyw, cam);
 	}
 
 	// for memory access pattern reasons the terrain gets drawn sideways. That's why we below transpose the framebuffer while copying it to the framebuffer
@@ -2035,123 +1966,29 @@ static void render()
 			botLayer.frameBuffer[x + pixelPitch] = frameBuffer[bufferPitch + (x)*window.drawSize.w];
 		}
 	}
+
+	// Draw mouse position
+	for (int y = -1; y < 1; y++)
+	{
+		for (int x = -1; x < 1; x++)
+		{
+			if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
+			{
+				if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
+				{
+					topLayer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * topLayer.w] = rgb(255,0,0);
+				}
+			}
+		}
+	}
+
+    drawText(topLayer, 100, 130, printfLocal("Total amount of water: %f", totalWaterLevel));
+	char* simStr = ((key.Y) ? "GPU" : "Processor");
+    drawText(topLayer, 100, 160, printfLocal("Sim running on: %s", simStr));
+
 }
 
 
-
-static void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset)
-{
-	
-	int w = MAPW;
-	int h = MAPH;
-	
-
-	float min = 0.f;
-	float max = 0.f;
-	float min2 = 0.f;
-	float max2 = 0.f;
-	int noOctaves = detail * 9.f;
-	if(noOctaves == 0){
-		for (int y = 0; y < h; y++)
-		{
-			for (int x = 0; x < w; x++)
-			{
-				map.stone[x + y * w] = 10.f;
-				map.sand[x + y * w] = 0.f;
-
-				min = 0.f;
-				max = 100.f;
-			}
-		}
-	}else{
-		for (int y = 0; y < h; y++)
-		{
-			for (int x = 0; x < w; x++)
-			{
-				map.stone[x + y * w] = 0.f;
-				map.sand[x + y * w] = 0.f;
-				float oPow2 = 1.f;
-				for(int o = 1; o <= noOctaves; o++, oPow2 *= 2.f){ 
-					
-					map.stone[x + y * w] += -fabsf(stb_perlin_noise3(oPow2*((float)x + xOffset)/(float)map.w, oPow2*((float)y + yOffset)/(float)map.h, 0, 0, 0, 0) / (oPow2));
-					
-				}
-					
-
-
-				min = minf(map.stone[x + y * w], min);
-				max = maxf(map.stone[x + y * w], max);
-			}
-			// printf("\rGenerating terrain %f", (float)y / (float)h);
-			// fflush(stdout);
-		}
-	}
-
-	float sandHeight = clampf(sand, 0.f, 1.f) * maxHeight;
-
-	float hDiff = max - min;
-	for (int y = 0; y < h; y++)
-	{
-		for (int x = 0; x < w; x++)
-		{
-			//Normalize terrain height and multiply by max Height
-			map.stone[x + y * w] = (-min + (map.stone[x + y * w])) / hDiff * maxHeight;
-
-			//Flatten the stone to a height of 10m below sand height, then add 10m of sand on top along with dunes.
-			if(map.stone[x + y * w] < sandHeight){
-				if(map.stone[x + y * w] < sandHeight - 10.f){
-					map.stone[x + y * w] = lerp(map.stone[x + y * w], (sandHeight - 10.f), (1.f - map.stone[x + y * w]/maxHeight));
-				}
-				
-				// map.sand[x + y * w] = lerp(map.stone[x + y * w], sandHeight, (1.f - map.stone[x + y * w]/maxHeight)) - map.stone[x + y * w];
-			}
-
-
-			min2 = minf(map.stone[x + y * w], min2);
-			max2 = maxf(map.stone[x + y * w], max2);
-		}
-	}
-
-	for (int y = 2; y < h-2; y++)
-	{
-		for (int x = 2; x < w-2; x++)
-		{
-			if(map.stone[x + y * w] < sandHeight){
-				map.sand[x + y * w] = (-min + stb_perlin_ridge_noise3(((float)x + xOffset)/(float)map.w, ((float)y + yOffset)/(float)map.h, 0.f, 2.5f, 2.8f, 1.f, 3, 0, 0, 0))  * 10.f * (1.f - map.stone[x + y * w] / sandHeight);
-			}
-		}
-
-	}
-
-	// for (int y = 0; y < h; y++)
-	// {
-	// 	for (int x = 0; x < w; x++)
-	// 	{
-	// 		vec2f_t prim = {
-	// 			.x = map.stone[(x+1)+(y)*w] - map.stone[(x-1)+(y)*w],
-	// 			.y = map.stone[(x)+(y+1)*w] - map.stone[(x)+(y-1)*w]
-	// 			};
-	// 		vec2f_t bis = {
-	// 			.x = (map.stone[(x+1)+(y)*w] - map.stone[(x)+(y)*w]) - (map.stone[(x)+(y)*w] - map.stone[(x-1)+(y)*w]),
-	// 			.y = (map.stone[(x)+(y+1)*w] - map.stone[(x)+(y)*w]) - (map.stone[(x)+(y)*w] - map.stone[(x)+(y-1)*w])
-	// 		};
-
-
-			
-	// 		// map.argbStone[(x)+(y)*w].r += bis.x*10.f;
-	// 		// map.argbStone[(x)+(y)*w].g += bis.y*10.f;
-	// 		// map.argbStone[(x)+(y)*w].b += bis.y*10.f;
-	// 		// map.argbStone[(x)+(y)*w].g = 0.f;
-	// 		// map.argbStone[(x)+(y)*w].b = 0.f;
-	// 	}
-	// }
-
-
-
-
-	printf("\nMapelevation extremes: %f -> %f\n" ,min2, max2);
-
-}
 
 static void init()
 {
@@ -2159,6 +1996,13 @@ static void init()
 	map.w = MAPW;
 	map.h = MAPH;
 	map.tileWidth = 1.f;
+
+	// map.waterSWE.depth = calloc(map.w * map.h, sizeof(float));
+	// map.waterSWE.flow = calloc(map.w * map.h, sizeof(vec2f_t));
+
+	map.water.depth = calloc(map.w * map.h, sizeof(float));
+	map.water.flow = calloc(map.w * map.h, sizeof(Fluid_flow));
+	map.water.vel = calloc(map.w * map.h, sizeof(vec2f_t));
 
 	// init camera position, the following will init camera to center overview a 256x256 map
 	// camera: x:336.321991 y:-93.287224 rot:1.570000 zoom:0.609125camera: x:327.101379 y:-84.052345 rot:1.570000 zoom:0.609125
@@ -2209,7 +2053,7 @@ static void init()
     }, cursor.amount, cursor.radius);
 
 
-	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand,terrainGen.x, terrainGen.y);
+	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
 
 	map.flags.updateShadowMap = 1; // make sure shadows are updated after map load
 	map.flags.updateColorMap = 1;  // make sure shadows are updated after map load
@@ -2287,16 +2131,16 @@ void process(){
 	
 
 
-	PROFILE(simulation(window.time.dTime););
+	PROFILE(simulation(window.time.dTime);)
 
 	if (window.time.tick.ms10 || map.flags.updateShadowMap == true)
 	{
-		PROFILE(generateShadowMap(););
+		PROFILE(generateShadowMap();)
 	}
 
 	if (window.time.tick.ms10 || map.flags.updateColorMap == true)
 	{
-		PROFILE(generateColorMap(););
+		PROFILE(generateColorMap();)
 	}
 
 
@@ -2313,80 +2157,27 @@ static int mainLoop()
 
 	
 
-
-	
-	int returnValue = 1;
-	if(renderStep != 2){
-		
-		returnValue = 1;
-	}else{
+	updateInput();
 
 
 
-		updateInput();
+	process();
 
-		if (fabsf(g_cam.rot) < 45.f * M_PI / 180.f || fabsf(g_cam.rot) >= 315.f * M_PI / 180.f)
-		{
-			g_cam.direction = NW;
-		}
-		else if (fabsf(g_cam.rot) < 135.f * M_PI / 180.f)
-		{
-			g_cam.direction = NE;
-		}
-		else if (fabsf(g_cam.rot) < 225.f * M_PI / 180.f)
-		{
-			g_cam.direction = SE;
-		}
-		else if (fabsf(g_cam.rot) < 315.f * M_PI / 180.f)
-		{
-			g_cam.direction = SW;
-		}
-
-
-
-		returnValue = window_run();
-
-		renderStep = 0;
+	//Update buffers that render will use
+	for(int i = 0; i < MAPW * MAPH; i++)
+	{
+		renderMapBuffer.height[i] = map.height[i];
+		renderMapBuffer.mistDepth[i] = map.mist[i].depth;
+		renderMapBuffer.argb[i] = map.argb[i];
+		renderMapBuffer.argbBlured[i] = map.argbBlured[i];
 	}
 
-	return returnValue;
+	PROFILE(render();)
+
+
+	return window_run();
 }
 
-void* renderThread(void* arg){
-	while(1){
-		while(renderStep != 1){}
-		render();
-		
-		renderStep = 2;
-
-
-	}
-	return NULL;
-}
-
-void* processThread(void* arg){
-	while(1){
-
-		process();
-		
-
-		//After proccess is done, wait until mainloop has
-		while(renderStep != 0){}
-		//Update buffers that render will use
-		for(int i = 0; i < MAPW * MAPH; i++)
-		{
-			renderMapBuffer.height[i] = map.height[i];
-			renderMapBuffer.mistDepth[i] = map.mist[i].depth;
-			renderMapBuffer.argb[i] = map.argb[i];
-			renderMapBuffer.argbBlured[i] = map.argbBlured[i];
-		}
-		renderStep = 1;
-
-
-
-	}
-	return NULL;
-}
 
 
 int main()
@@ -2403,6 +2194,8 @@ int main()
 	window.drawSize.h = rendererSizeY;
 	window.size.w = windowSizeX;
 	window.size.h = windowSizeY;
+
+	window.settings.vSync = false;
 	
 
 
@@ -2411,17 +2204,18 @@ int main()
 	// init bottom layer
 	botLayer = window_createLayer();
 	// init top layer
-	topLayer = window_createLayer();
+	// topLayer = window_createLayer();
+	topLayer = botLayer;
 
-	init();
+	PROFILE(init();)
 
 
 	//Create two seperate running threads, one will update the simulation and one will render the map
-	pthread_t render_pthread;
-	pthread_t process_pthread;
+	// pthread_t render_pthread;
+	// pthread_t process_pthread;
 	
-	if(pthread_create(&render_pthread, NULL, renderThread, NULL)) printf("Error creating thread\n");
-	if(pthread_create(&process_pthread, NULL, processThread, NULL)) printf("Error creating thread\n");
+	// if(pthread_create(&render_pthread, NULL, renderThread, NULL)) printf("Error creating thread\n");
+	// if(pthread_create(&process_pthread, NULL, processThread, NULL)) printf("Error creating thread\n");
 
 #ifdef __EMSCRIPTEN__
 	emscripten_set_main_loop((void (*)(void))mainLoop, 0, 1);

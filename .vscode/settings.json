@@ -21,7 +21,10 @@
         "sdl_syswm.h": "c",
         "immintrin.h": "c",
         "x86gprintrin.h": "c",
-        "functional": "c"
+        "functional": "c",
+        "ios": "c",
+        "glad.h": "c",
+        "stb_perlin.h": "c"
     },
     "cmake.configureOnOpen": true,
     "makefile.launchConfigurations": [
