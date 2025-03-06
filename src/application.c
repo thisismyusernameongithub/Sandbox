@@ -21,6 +21,8 @@
 #include "simulation.h"
 #include "css_profile.h"
 #include "camera.h"
+#include "render.h"
+#include "globals.h"
 
 
 
@@ -58,55 +60,16 @@ int NEWFEATURE = 1;
 float newFloat = 0.79f;
 
 
-struct{
-	argb_t white;
-	argb_t black;
-	argb_t gray;
-	argb_t red;
-	argb_t orange;
-	argb_t green;
-	argb_t blue;
-	argb_t yellow;
-    argb_t stone;
-    argb_t waterDark;
-    argb_t water;
-    argb_t waterLight;
-    argb_t foam;
-    argb_t mist;
-    argb_t sand;
-	argb_t lava;
-	argb_t lavaBright;
-}pallete = {
-	.white        = rgb(255, 255, 255),
-    .black        = rgb(0, 0, 0),
-    .gray         = rgb(48, 48, 48),
-	.red          = rgb(255, 0, 0),
-	.orange       = rgb(255, 165, 0),
-	.green        = rgb(0, 255, 0),
-	.blue         = rgb(0, 0, 255),
-	.yellow       = rgb(255, 255, 0),
-    .stone        = rgb(61, 53, 51),
-    .waterDark    = rgb(64, 96, 99),
-    .water        = rgb(76, 138, 133),
-    .waterLight   = rgb(147, 189, 168),
-    .foam         = rgb(210, 210, 210),
-    .mist         = rgb(235, 233, 236),
-    .sand         = rgb(186, 165, 136),
-    .lava         = rgb(254, 62, 10),
-	.lavaBright   = rgb(254, 162, 3)
-};
-// https://coolors.co/406063-4c8a85-93bda8-baa588-ebe9ec-d2d2d2-3d3533-fe3e0a-fea203
-
 #define MAPW 256
 #define MAPH 256
 
-#define windowSizeX 512	
-#define windowSizeY 512
-#define rendererSizeX 512
-#define rendererSizeY 512
+#define windowSizeX 1024	
+#define windowSizeY 1024
+#define rendererSizeX 1024
+#define rendererSizeY 1024
 
 
-
+void drawUI(Layer layer);
 
 
 struct{
@@ -150,7 +113,11 @@ struct{
 
 camera_t g_cam = {
     .limits.zoomMax = 0.5f,
-    .limits.zoomMin = 0.03f
+    .limits.zoomMin = 0.03f,
+    .limits.yMax = 100.f,
+    .limits.yMin = -100.f,
+	.limits.xMax = 100.f,	
+	.limits.xMin = -100.f
 };
 
 
@@ -198,12 +165,9 @@ typedef struct{
 
 Map map;
 
-struct{
-	float height[MAPW * MAPH];
-	float mistDepth[MAPW * MAPH];
-	argb_t argb[MAPW * MAPH];
-	argb_t argbBlured[MAPW * MAPH];
-}renderMapBuffer; //Stores stuff from map that will be used for rendering, frees up the map structure to be updated for next frame while current frame is rendering
+
+RenderMapBuffer renderMapBuffer;
+
 
 typedef struct{
 	float x;
@@ -219,7 +183,7 @@ typedef struct{
 TerrainGen terrainGen = {
 	.autoGenerate = 0,
 	.maxHeight = 100.f,
-	.detail = 0.f,
+	.detail = 1.f,
 	.sand = 0.0f,
 	.x = 0.f,
 	.y = 0.f
@@ -235,13 +199,13 @@ struct{
 	{},{.pos.x = 100, .pos.y = 100, .amount = 1000.f}
 };
 
+//Function prototypes from terrainGeneration.c
 void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset, int mapW, int mapH, float* stoneMap, float* sandMap);
+void erode(int w, int h, float* stone, float* sand);
+void erodeOld(int w, int h, float* stone, float* sand);
 
 
-static argb_t getTileColorWater(int x, int y, int ys, vec2f_t upVec, float shade);
 
-argb_t frameBuffer[rendererSizeX * rendererSizeY];
-argb_t background[rendererSizeX * rendererSizeY]; // Stores background image that get copied to framebuffer at start of render
 
 float totalFoamLevel;
 float totalSandLevel;
@@ -255,339 +219,6 @@ Layer topLayer;
 
 
 
-
-void erodeOld()
-{
-	
-	float Pminslope = 0.01;
-	float Pmaxslope = 10;
-	float Pmaxdepth = -100; // max depth terrain can erode to (prevents super deep canyons)
-	float Pcapacity = 4;
-	float Pdeposition = 0.3; // how much of surplus sediment is deposited
-	float Perosion = 0.3;	 // how much a droplet can erode a tile
-	float Pgravity = 4;
-	int Pmaxsteps = 100; // max number of steps for a droplet
-	float Pevaporation = 0.01;
-	float initialSpeed = 1;
-	float initialWaterVolume = 1;
-	float inertia = 0.1;
-
-	for (int iter = 0; iter < 1000; iter++)
-	{
-		float dirX_new = 0;
-		float dirY_new = 0;
-		float dirX_old = 0;
-		float dirY_old = 0;
-		float x = 0;
-		float y = 0;
-		float hdiff = 0;
-		float water = initialWaterVolume;
-		float speed = initialSpeed;
-		float sediment = 0;
-		// get random starting coordinates
-		x = rand() % map.w;
-		y = rand() % map.h;
-
-		float sedup = 0;
-		float sedown = 0;
-		for (int step = 0; step < Pmaxsteps; step++)
-		{
-			int oldPosID = (int)(x) + (int)(y) * map.w;
-			int oldX = (int)(x);
-			int oldY = (int)(y);
-
-			// get slope gradient
-			float slopeX = 0, slopeY = 0;
-			float oldSlopeX = 0;
-			float oldSlopeY = 0;
-			for (int i = -1; i < 2; i++)
-			{ // y
-				for (int j = -1; j < 2; j++)
-				{ // x
-					int m = y + i;
-					int n = x + j;
-					if (m > 0 && m < map.h && n > 0 && n < map.w)
-					{
-						double dh = map.stone[oldPosID] + map.sand[oldPosID] - map.stone[n + m * map.w] - map.sand[n + m * map.w]; // height difference
-						slopeX -= dh * j;
-						slopeY -= dh * i;
-						oldSlopeX += dh * j;
-						oldSlopeY += dh * i;
-					}
-				}
-			}
-			// get new direction
-			dirX_new = dirX_new * inertia - slopeX * (1 - inertia);
-			dirY_new = dirY_new * inertia - slopeY * (1 - inertia);
-
-			// normalize direction
-			float dirLenght = sqrt(dirX_new * dirX_new + dirY_new * dirY_new);
-			if (dirLenght != 0)
-			{
-				dirX_new = dirX_new / dirLenght;
-				dirY_new = dirY_new / dirLenght;
-			}
-			// get new pos by adding direction to old pos
-			x += dirX_new;
-			y += dirY_new;
-			int newPosID = (int)(x) + (int)(y) * map.w;
-			// check if droplet is still within the map
-			if ((dirX_new == 0 && dirY_new == 0) || x < 0 || x > map.w - 1 || y < 0 || y > map.h - 1)
-			{
-				// printf("Out of bounds\n");
-				break;
-			}
-			// get height difference
-			hdiff = map.stone[newPosID] + map.sand[newPosID] - map.stone[oldPosID] - map.sand[oldPosID];
-			// calculate new carrying capacity
-			float capacity = minf(maxf(-hdiff, Pminslope) * speed * water * Pcapacity, Pmaxslope);
-			if (map.stone[newPosID] + map.sand[newPosID] < -1)
-				capacity = Pminslope * speed * water * Pcapacity;
-			// if drop carries more sediment then capacity
-			if (sediment > capacity || hdiff > 0)
-			{
-				if (hdiff > 0)
-				{ // uphill
-					// deposit at old pos
-					// fill the hole but not with more than hdiff
-					float amount = minf(hdiff, sediment);
-					sediment -= amount;
-					map.sand[oldPosID] += amount;
-					sedown += amount;
-				}
-				else
-				{
-					// drop (sediment - capacity)*Pdeposition at old pos
-					float amount = (sediment - capacity) * Pdeposition;
-					sediment -= amount;
-					map.sand[oldPosID] += amount;
-					sedown += amount;
-				}
-			}
-			else
-			{ // if drop carries less sediment then capacity, pick up sediment
-				// get std::min((c-sediment)*Perosion,-hdiff) sediment from old pos
-				float amount = minf((capacity - sediment) * Perosion, -hdiff);
-				sediment += amount;
-				// pick up sediment from an area around the old pos using normal distribution
-				for (int j = -4; j <= 4; j++)
-				{
-					for (int k = -4; k <= 4; k++)
-					{
-						if (oldX >= 0 && oldX <= map.w && oldY >= 0 && oldY <= map.h)
-						{
-							float temp_amount = amount * (exp(-(k * k + j * j) / (2 * 8)) / (2 * 3.14159265359 * 8)) / 1.14022; // amount to pick up
-							if (map.sand[oldPosID] > 0)
-							{ // if there is sediment
-								float diff = map.sand[oldPosID + k + j * map.w] - temp_amount;
-								if (diff > 0)
-								{ // there is more sediment then is picked up
-									map.sand[oldPosID + k + j * map.w] -= temp_amount;
-									sedup += temp_amount;
-									temp_amount = 0;
-								}
-								else
-								{ // there is less sediment then is picked up
-									temp_amount -= map.sand[oldPosID + k + j * map.w];
-									sedup += temp_amount;
-									map.sand[oldPosID + k + j * map.w] = 0;
-								}
-							}
-							sedup += temp_amount;
-							map.stone[oldPosID + k + j * map.w] -= temp_amount; //*exp(-(k*k+j*j)/(2))/(2*3.14159265359)/1.32429; //remove rest of sediment from rock
-						}
-					}
-				}
-			}
-			// get new speed
-			speed = sqrt(speed * speed + fabsf(hdiff) * Pgravity);
-			// evaporate some water
-			water = water * (1 - Pevaporation);
-			//		std::cout << "pos:" << x << "," << y << " dirX:" << dirX_new << " dirY:" << dirY_new << " speed:" << speed << std::endl;
-			//		std::cout << " hdiff:" << hdiff  << " capacity:" << capacity << " sediment:"<< sediment << " water:" << water << std::endl;
-		}
-		// std::cout << "up:" <<  sedup << " down:" << sedown << std::endl;
-	}
-	
-
-	float rocksum = 0;
-	float sedsum = 0;
-	for (int y = 0; y < map.w; y++)
-	{
-
-		for (int x = 0; x < map.w; x++)
-		{
-			rocksum += map.stone[x + y * map.w];
-			sedsum += map.sand[x + y * map.w];
-		}
-	}
-	
-	float sum = 0;
-	for (int j = -4; j <= 4; j++)
-	{
-		for (int k = -4; k <= 4; k++)
-		{
-			sum += exp(-(k * k + j * j) / (2 * 8)) / (2 * 3.14159265359 * 8) / 1.14022; // amount to pick up
-		}
-	}
-	
-}
-
-float mapBuffer[MAPW*MAPH];
-float mapBuffer2[MAPW*MAPH];
-void erode()
-{
-	
-	float Pminslope = 0.f;
-	float Pmaxslope = 1.f;
-	float Pcapacity = 2.f;
-	float Pdeposition = 0.1f; // how much of surplus sediment is deposited
-	float Perosion = 0.01f;	 // how much a droplet can erode a tile
-	float Pgravity = 9.81f;
-	int Pmaxsteps = 100; // max number of steps for a droplet
-	float Pevaporation = 0.01f;
-	float initialSpeed = 1.f;
-	float initialWaterVolume = 10.f;
-	float inertia = 0.5f;
-
-	for (int iter = 0; iter < 1000; iter++)
-	{
-		float dirX_new = 0;
-		float dirY_new = 0;
-		float dirX_old = 0;
-		float dirY_old = 0;
-		float x = 0;
-		float y = 0;
-		float hdiff = 0;
-		float water = initialWaterVolume;
-		float speed = initialSpeed;
-		float sediment = 0;
-		// get random starting coordinates
-		x = rand() % map.w;
-		y = rand() % map.h;
-
-
-
-		for (int step = 0; step < Pmaxsteps; step++)
-		{
-
-			int oldPosID = (int)(x) + (int)(y) * map.w;
-			int oldX = (int)(x);
-			int oldY = (int)(y);
-
-			// get slope gradient
-			float slopeX = map.stone[(oldX + 1) + (oldY) * map.w] + map.sand[(oldX + 1) + (oldY) * map.w] - map.stone[(oldX - 1) + (oldY) * map.w] - map.sand[(oldX - 1) + (oldY) * map.w]; // height difference
-			float slopeY = map.stone[(oldX) + (oldY + 1) * map.w] + map.sand[(oldX) + (oldY + 1) * map.w] - map.stone[(oldX) + (oldY - 1) * map.w] - map.sand[(oldX) + (oldY - 1) * map.w]; // height difference
-			// get new direction
-			dirX_new = dirX_new * inertia - slopeX * (1 - inertia);
-			dirY_new = dirY_new * inertia - slopeY * (1 - inertia);
-
-			// normalize direction
-			float dirLenght = sqrt(dirX_new * dirX_new + dirY_new * dirY_new);
-			if (dirLenght != 0)
-			{
-				dirX_new = dirX_new / dirLenght;
-				dirY_new = dirY_new / dirLenght;
-			}
-			// get new pos by adding direction to old pos
-			x += dirX_new;
-			y += dirY_new;
-			int newPosID = (int)(x) + (int)(y) * map.w;
-			// check if droplet is still within the map
-			if(!((int)x > 1 && (int)y > 1 && (int)x < map.w - 1 && (int)y < map.h - 1))
-			{
-				map.sand[oldPosID] += sediment;
-				break;
-			}
-			// get height difference
-			hdiff = map.stone[newPosID] + map.sand[newPosID] - map.stone[oldPosID] - map.sand[oldPosID];
-			// calculate new carrying capacity
-			float capacity = minf(maxf(-hdiff, Pminslope),Pmaxslope) * speed * water * Pcapacity;
-			// printf("%d: %f * %f * %f * %f = %f\n", step, hdiff, speed, water, Pcapacity, capacity);
-			// if (map.stone[newPosID] + map.sand[newPosID] < -1){
-			// 	capacity = Pminslope * speed * water * Pcapacity;
-			// }
-			// printf("step: %d capacity: %f\n", step, capacity);
-
-
-			// if drop carries more sediment then capacity
-			if (sediment > capacity || hdiff > 0)
-			{
-				if (hdiff > 0)
-				{ // uphill
-					// deposit at old pos
-					// fill the hole but not with more than hdiff
-					float amount = minf(hdiff, sediment);
-					sediment -= amount;
-					map.sand[oldPosID] += amount;
-
-				}
-				
-				{
-					// drop (sediment - capacity)*Pdeposition at old pos
-					float amount = (sediment - capacity) * Pdeposition;
-					sediment -= amount;
-					map.sand[oldPosID] += amount;
-
-				}
-			}
-			else
-			{ // if drop carries less sediment then capacity, pick up sediment
-				// get std::min((c-sediment)*Perosion,-hdiff) sediment from old pos
-				float amount = minf((capacity - sediment) * Perosion, -hdiff);
-				// sediment += amount;
-
-				float radius = 4.f;
-				float sigma = radius / 4.f; // Width of distribution
-				float s = 2.f * sigma * sigma; //Standard deviation I think
-				// pick up sediment from an area around the old pos using normal distribution
-				for (int j = -radius; j <= radius; j++)
-				{
-					for (int k = -radius; k <= radius; k++)
-					{
-						if (oldX + k > 1 && oldY + j > 1 && oldX + k < map.w - 1 && oldY + j < map.h - 1)
-						{
-							float r = sqrtf(k * k + j * j);
-							float temp_amount = amount * expf(-(r * r) / (s)) / (M_PI * s);
-							map.stone[oldPosID + k + j * map.w] += minf(map.sand[oldPosID + k + j * map.w] - temp_amount, 0.f);
-							map.sand[oldPosID + k + j * map.w] = maxf(map.sand[oldPosID + k + j * map.w] - temp_amount, 0.f);
-							sediment += temp_amount;
-							// float temp_amount = amount * (exp(-(k * k + j * j) / (2 * 8)) / (2 * 3.14159265359 * 8)) / 1.14022; // amount to pick up
-							// if (map.sand[oldPosID] > 0)
-							// { // if there is sediment
-							// 	float diff = map.sand[oldPosID + k + j * map.w] - temp_amount;
-							// 	if (diff > 0)
-							// 	{ // there is more sediment then is picked up
-							// 		map.sand[oldPosID + k + j * map.w] -= temp_amount;
-
-							// 		temp_amount = 0;
-							// 	}
-							// 	else
-							// 	{ // there is less sediment then is picked up
-							// 		temp_amount -= map.sand[oldPosID + k + j * map.w];
-
-							// 		map.sand[oldPosID + k + j * map.w] = 0;
-							// 	}
-							// }
-
-							// map.stone[oldPosID + k + j * map.w] -= temp_amount; //*exp(-(k*k+j*j)/(2))/(2*3.14159265359)/1.32429; //remove rest of sediment from rock
-						}
-					
-					}
-				}
-				// get new speed
-				speed = sqrt(speed * speed + fabsf(hdiff) * Pgravity);
-				// evaporate some water
-				water = water * (1 - Pevaporation);
-				
-			}
-
-		}
-	}
-	
-
-
-}
 
 
 EMSCRIPTEN_KEEPALIVE
@@ -687,6 +318,10 @@ void setmapGenY(int y)
 	}
 }
 
+
+
+
+
 static void updateInput(){
 	cursor.screenX = mouse.pos.x;
 	cursor.screenY = mouse.pos.y;
@@ -767,39 +402,45 @@ static void updateInput(){
 
 
 	if (key.A == eKEY_HELD){
-		g_cam.x += cosf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
-		g_cam.y += sinf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
+		cam_pan(&g_cam, -300.f * window.time.dTime, 0.f);
+		// g_cam.x += cosf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
+		// g_cam.y += sinf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
 	}
 	if (key.D == eKEY_HELD){
-		g_cam.x -= cosf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
-		g_cam.y -= sinf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
+		cam_pan(&g_cam, 300.f * window.time.dTime, 0.f);
+		// g_cam.x -= cosf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
+		// g_cam.y -= sinf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
 	}
 	if (key.W == eKEY_HELD){
-		g_cam.x -= sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
-		g_cam.y += cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
+		cam_pan(&g_cam, 0.f, -450.f * window.time.dTime);
+		// g_cam.x -= sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
+		// g_cam.y += cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
 
 		// Print camera pos
 		printf("camera: x:%f y:%f rot:%f zoom:%f\n", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
 	}
 	if (key.S == eKEY_HELD){
-		g_cam.x += sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
-		g_cam.y -= cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
+		cam_pan(&g_cam, 0.f, 450.f * window.time.dTime);
+		// g_cam.x += sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
+		// g_cam.y -= cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
 	}
 	if (key.R == eKEY_HELD){
-		cam_zoom(&g_cam, 1.f);
+		cam_zoom(&g_cam, 1.f  * window.time.dTime);
 	}
 	if (key.F == eKEY_HELD){
-        cam_zoom(&g_cam, -1.f);
+        cam_zoom(&g_cam, -1.f  * window.time.dTime);
 	}
 	if (key.Q == eKEY_HELD){
-		float angle = 32.f * M_PI / 180.f;
-		g_cam.rot = fmod((g_cam.rot - angle * 2.f * window.time.dTime), 6.283185307f);
-		if (g_cam.rot < 0.f)
-			g_cam.rot = 6.283185307f;
+		float angle = 64.f * M_PI / 180.f;
+		cam_rot(&g_cam, -angle * window.time.dTime);
+		// g_cam.rot = fmod((g_cam.rot - angle * 2.f * window.time.dTime), 6.283185307f);
+		// if (g_cam.rot < 0.f)
+		// 	g_cam.rot = 6.283185307f;
 	}
 	if (key.E == eKEY_HELD){
-		float angle = 32.f * M_PI / 180.f;
-		g_cam.rot = fmod((g_cam.rot + angle * 2.f * window.time.dTime), 6.283185307f);
+		float angle = 64.f * M_PI / 180.f;
+		cam_rot(&g_cam, angle * window.time.dTime);
+		// g_cam.rot = fmod((g_cam.rot + angle * 2.f * window.time.dTime), 6.283185307f);
 	}
 	if (key.ESC == eKEY_HELD){
 		window.closeWindow = true;
@@ -855,7 +496,7 @@ static void updateInput(){
 		}else if(key.ctrlLeft == eKEY_HELD){
 			cursor.amount += mouse.dWheel;
 			cursor.amount = clampf(cursor.amount, 1.f, 10.f);
-				EM_ASM_({
+			EM_ASM_({
 				toolAmountAmount.value = $0;
 				toolAmountSlider.value = $0;
 			}, cursor.amount);
@@ -871,8 +512,11 @@ static void updateInput(){
 
 
 
-	if (key.K == eKEY_PRESSED){
-		erode();
+	if (key.I == eKEY_HELD){
+		PROFILE(erode(map.w, map.h, map.stone, map.sand);)
+	}
+	if (key.O == eKEY_HELD){
+		PROFILE(erodeOld(map.w, map.h, map.stone, map.sand);)
 	}
 	if (key.L == eKEY_PRESSED){
 		NEWFEATURE = (NEWFEATURE) ? 0 : 1;
@@ -880,23 +524,6 @@ static void updateInput(){
 	}
 
 
-	//TODO: Move into some update camera function that only runs when the camera rotation changes
-	if (fabsf(g_cam.rot) < 45.f * M_PI / 180.f || fabsf(g_cam.rot) >= 315.f * M_PI / 180.f)
-	{
-		g_cam.direction = NW;
-	}
-	else if (fabsf(g_cam.rot) < 135.f * M_PI / 180.f)
-	{
-		g_cam.direction = NE;
-	}
-	else if (fabsf(g_cam.rot) < 225.f * M_PI / 180.f)
-	{
-		g_cam.direction = SE;
-	}
-	else if (fabsf(g_cam.rot) < 315.f * M_PI / 180.f)
-	{
-		g_cam.direction = SW;
-	}
 
 }
 
@@ -1595,400 +1222,6 @@ static void simulation(float dTime)
 
 }
 
-argb_t getTileColorMist(int x, int y, int ys, vec2f_t upVec){
-
-//Ide, använd screen2world för att få rutan som motsvarar botten istället.
-    argb_t argb = pallete.red;
-
-    float mistHeight =  renderMapBuffer.height[x+y*map.w] + renderMapBuffer.mistDepth[x+y*map.w];
-
-    float d;
-    for(d = 0.f; d < 300.f; d += 1.f){
-		int X = x+upVec.x*d;
-		int Y = y+upVec.y*d;
-		if(X >= 0 && X < map.w && Y >= 0 && Y < map.h){
-			if(renderMapBuffer.height[(int)(x+upVec.x*d)+(int)(y+upVec.y*d)*map.w] > mistHeight - (d * 0.79f)){ //0.7071f = 1/sqrt(2)
-
-				argb = renderMapBuffer.argb[X+Y*map.w];
-
-				argb = lerpargb(argb, renderMapBuffer.argbBlured[X+Y*map.w], minf(d/10.f, 1.f));
-
-				break;
-			}
-		}else{
-			
-			//If the mist is up against the wall, sample the background picture to make it appear transparent
-			//I don't know why the coordinates are like this, I just tried stuff until it worked....
-			argb.r = background[rendererSizeY - ys].r; //(102+(int)ys)>>2;//67
-			argb.g = background[rendererSizeY - ys].g; //(192+(int)ys)>>2;//157
-			argb.b = background[rendererSizeY - ys].b; //(229+(int)ys)>>2;//197
-
-            break;
-
-		}
-    }
-
-	
-	// vec2f_t a = world2screen(upVec.x, upVec.y, g_cam);
-	// vec2f_t b = world2screen(upVec.x + 1.f, upVec.y + 1.f, g_cam);
-	// printf("%f %f %f %f %f\n",a.x, a.y, b.x, b.y, b.y-a.y);
-
-
-	argb = lerpargb(argb, pallete.mist, minf(d/50.f, 1.f));
-
-
-
-    // argb.r = lerp(argb.r, pallete.white.r, mistDensity);
-    // argb.g = lerp(argb.g, pallete.white.g, mistDensity);
-    // argb.b = lerp(argb.b, pallete.white.b, mistDensity);
-
-	return argb;
-	
-}
-
-
-
-// renders one pixel column
-static void renderColumn(int x, int yBot, int yTop, vec2f_t upVec, float xwt, float ywt, float dDxw, float dDyw, camera_t camera)
-{
-	
-	float camZoom = camera.zoom;
-	float camZoomDiv = 1.f / camera.zoom;
-	float camZoomDivBySqrt2 = (camZoomDiv) /  sqrtf(2.f);
-
-	// init some variables
-
-	int border = false; // used when skiping pixels to decide when at a edge of a tile that should be a darker shade
-	int dPixels;		// how many pixels are skipped to get to the next tile
-
-	// init ybuffer with lowest mappoint at current x screen position
-	// ybuffer stores the last drawn lowest position so there is no overdraw
-
-	int ybuffer = minf(yBot, window.drawSize.h); // Limit lowest drawing point (ybuffer start value) to edge of screen
-
-	// start drawing column
-	for (int y = yBot; y > yTop; y -= dPixels)
-	{
-		int ys;
-
-		int ywti = (int)ywt;
-		int xwti = (int)xwt;
-
-
-
-		ys = y - (renderMapBuffer.height[xwti + ywti * map.w] + renderMapBuffer.mistDepth[xwti + ywti * map.w]) * camZoomDivBySqrt2;  // offset y by terrain height (sqr(2) is to adjust for isometric projection)
-
-		ys = ys * !(ys & 0x80000000);			// Non branching version of : ys = maxf(ys, 0);
-
-		if (ys < ybuffer)
-		{
-			// get color at worldspace and draw at screenspace
-			register argb_t argb; // store color of Pixel that will be drawn
-
-			// draw mist if present
-			if (map.present[xwti + ywti*map.w].mist)
-			{
-                argb = getTileColorMist(xwti, ywti, ys, upVec);
-			}else{
-				argb = renderMapBuffer.argb[xwti + ywti * map.w];
-			}
-			
-
-			// make borders of tiles darker, make it so they become darker the more zoomed in you are
-			if (camZoom < 0.3f && !border)
-			{
-				argb = lerpargb(argb, pallete.black, camZoomDiv/255.f);
-			}
-
-			// only draw visible pixels
-			for (register int Y = ybuffer - 1; Y >= ys; Y--)
-			{
-				frameBuffer[window.drawSize.h - 1 - Y + (x)*window.drawSize.h] = argb; // draw pixels
-			}
-			
-
-			ybuffer = ys; // save current highest point in pixel column
-		}
-
-		// this piece of code calculates how many y pixels (dPixels) there is to the next tile
-		// and the border thing makes it so it only jumps one pixel when there is a
-		// new tile and the next drawing part is darker, thus making the edge of the tile darker
-		if (!border)
-		{
-			border = 1;
-			float testX, testY;
-			switch (camera.direction)
-			{
-			case NW:
-				testX = ((xwt - (int)xwt)) / dDxw;
-				testY = ((ywt - (int)ywt)) / dDyw;
-				break;
-			case NE:
-				testX = ((1 - (xwt - (int)xwt)) / dDxw);
-				testY = (((ywt - (int)ywt)) / dDyw);
-				break;
-			case SE:
-				testX = (1 - (xwt - (int)xwt)) / dDxw;
-				testY = (1 - (ywt - (int)ywt)) / dDyw;
-				break;
-			case SW:
-				testX = (((xwt - (int)xwt)) / dDxw);
-				testY = ((1 - (ywt - (int)ywt)) / dDyw);
-				break;
-			default:
-				fprintf(stderr, "Unitialized value used at %s %d\n", __FILE__, __LINE__);
-				exit(0);
-			}
-			dPixels = minf(fabs(testX), fabs(testY));
-			if (dPixels < 1)
-				dPixels = 1;
-			xwt += dDxw * dPixels;
-			ywt += dDyw * dPixels;
-		}
-		else
-		{
-
-			border = 0;
-			xwt += dDxw;
-			ywt += dDyw;
-			dPixels = 1;
-		}
-	}
-}
-
-static void render()
-{
-
-	clearLayer(botLayer);
-	clearLayer(topLayer);
-
-	// drawText(topLayer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
-
-	
-
-
-#ifdef DEBUG
-    int cwx = clampf(cursor.worldX, 0, map.w);
-    int cwy = clampf(cursor.worldY, 0, map.h);
-	// drawText(topLayer, 10, 30,  printfLocal("Mouse: %d, %d | %d, %d | zoom: %f", mouse.pos.x, mouse.pos.y, cwx, cwy, g_cam.zoom) );
-	// drawText(topLayer, 10, 50,  printfLocal("Shadow: %f", map.shadow[cwx+cwy*map.w]));
-	// drawText(topLayer, 10, 70,  printfLocal("foam: %f total: %f", map.foamLevel[cwx+cwy*map.w], totalFoamLevel));
-	// drawText(topLayer, 10, 90,  printfLocal("Stone: %f total: %f", map.stone[cwx+cwy*map.w], totalStoneLevel));
-	// drawText(topLayer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*map.w], totalSandLevel));
-    // drawText(topLayer, 10, 130, printfLocal("Water: %f total: %f", map.water[cwx+cwy*map.w].depth, totalWaterLevel));
-    // drawText(topLayer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*map.w].depth, totalMistLevel));
-	// drawText(topLayer, 10, 170,  printfLocal("waterVel: %f, %f", map.waterVel[cwx+cwy*map.w].x, map.waterVel[cwx+cwy*map.w].y));
-
-    //Draw water is present data
-	// for (int y = 0; y < map.h; y++)
-	// {
-	// 	for (int x = 0; x < map.w; x++)
-	// 	{
-    //         if(map.present[x+y*map.w].water){
-    //             vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-    //             sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)   / (sqrtf(2.f) * g_cam.zoom);
-    //             drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
-    //         }
-    //     }
-    // }
-
-	//Draw water velocity markers
-	// for (int y = 0; y < map.h; y++)
-	// {
-	// 	if((y % 10)) continue;
-	// 	for (int x = 0; x < map.w; x++)
-	// 	{
-	// 		if((x % 10)) continue;
-	// 		float x2 = x + map.waterVel[x + y * map.w].x;
-	// 		float y2 = y + map.waterVel[x + y * map.w].y;
-	// 		vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-	// 		vec2f_t sPos2 = world2screen((float)x2+0.5f,(float)y2+0.5f,g_cam);
-	// 		sPos.y = sPos.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)   / (sqrtf(2.f) * g_cam.zoom);
-	// 		sPos2.y = sPos2.y - (map.height[x+y*map.w] + map.water[x+y*map.w].depth)   / (sqrtf(2.f) * g_cam.zoom);
-	// 		float vel = sqrtf((map.waterVel[x + y * map.w].x*map.waterVel[x + y * map.w].x)+(map.waterVel[x + y * map.w].y*map.waterVel[x + y * map.w].y));
-	// 		drawLine(topLayer, sPos.x,sPos.y, sPos2.x, sPos2.y, pallete.white);
-	// 		drawPoint(topLayer, sPos.x, sPos.y, pallete.red);
-	// 	}
-	// }
-
-	//Draw mouse position
-	// for (int y = -1; y < 1; y++)
-	// {
-	// 	for (int x = -1; x < 1; x++)
-	// 	{
-	// 		if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
-	// 		{
-	// 			if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
-	// 			{
-	// 				topLayer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * topLayer.w].argb = 0xFFFFFFFF;
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	//Draw foamspawner
-	for(int i = 0; i < FOAMSPAWNER_MAX; i++){
-		if(foamSpawner[i].amount > 0.f){
-			int x = foamSpawner[i].pos.x;
-			int y = foamSpawner[i].pos.y;
-			vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-			sPos.y = sPos.y - (map.height[x+y*map.w] + map.water.depth[x+y*map.w])  / (sqrtf(2.f) * g_cam.zoom);
-			drawSquare(topLayer, sPos.x - 1, sPos.y - 1, 2, 2, pallete.red);
-		}
-	}
-	
-
-#endif
-
-
-	// Since this runs on a separate thread from input update I need to back up camera variables so they don't change during rendering
-	camera_t cam;
-	cam.rot = g_cam.rot;
-	cam.zoom = g_cam.zoom;
-	cam.x = g_cam.x;
-	cam.y = g_cam.y;
-	cam.direction = g_cam.direction;
-
-	// Copy background to framebuffer
-	memcpy(frameBuffer, background, sizeof(frameBuffer));
-
-
-	float xw, yw;
-	float xs, ys;
-
-	// furstum
-	xs = 0;
-	ys = 0;
-	vec2f_t ftl = screen2world(xs, ys, cam);
-	xs = window.drawSize.w;
-	ys = window.drawSize.h;
-	vec2f_t fbr = screen2world(xs, ys, cam);
-	xs = 0;
-	ys = window.drawSize.h;
-	vec2f_t fbl = screen2world(xs, ys, cam);
-	xs = 0;
-	ys = window.drawSize.h + 100.f / cam.zoom;
-
-	float dDxw = (ftl.x - fbl.x) / (float)window.drawSize.h; // delta x worldspace depth
-	float dDyw = (ftl.y - fbl.y) / (float)window.drawSize.h; // delta y worldspace depth
-
-	// create normalized vector that point up on the screen but in world coorinates, for use with raytracing water refraction
-	vec2f_t upVec = {ftl.x - fbl.x, ftl.y - fbl.y};
-	float tempDistLongName = sqrtf(upVec.x * upVec.x + upVec.y * upVec.y);
-	upVec.x /= tempDistLongName;
-	upVec.y /= tempDistLongName;
-
-	///////// merge these calculations later
-	// calculate screen coordinates of world corners
-	vec2f_t tlw = world2screen(1, 1, cam);
-	vec2f_t trw = world2screen(map.w, 1, cam);
-	vec2f_t blw = world2screen(1, map.h, cam);
-	vec2f_t brw = world2screen(map.w, map.h, cam);
-	// check what relative postion map corners have
-	vec2f_t mapCornerTop, mapCornerLeft, mapCornerBot, mapCornerRight;
-	switch (cam.direction)
-	{
-	case NW:
-		mapCornerTop = (vec2f_t){tlw.x, tlw.y};
-		mapCornerLeft = (vec2f_t){blw.x, blw.y};
-		mapCornerBot = (vec2f_t){brw.x, brw.y};
-		mapCornerRight = (vec2f_t){trw.x, trw.y};
-		break;
-	case NE:
-		mapCornerRight = (vec2f_t){brw.x, brw.y};
-		mapCornerTop = (vec2f_t){trw.x, trw.y};
-		mapCornerLeft = (vec2f_t){tlw.x, tlw.y};
-		mapCornerBot = (vec2f_t){blw.x, blw.y};
-		break;
-	case SE:
-		mapCornerBot = (vec2f_t){tlw.x, tlw.y};
-		mapCornerRight = (vec2f_t){blw.x, blw.y};
-		mapCornerTop = (vec2f_t){brw.x, brw.y};
-		mapCornerLeft = (vec2f_t){trw.x, trw.y};
-		break;
-	case SW:
-		mapCornerLeft = (vec2f_t){brw.x, brw.y};
-		mapCornerBot = (vec2f_t){trw.x, trw.y};
-		mapCornerRight = (vec2f_t){tlw.x, tlw.y};
-		mapCornerTop = (vec2f_t){blw.x, blw.y};
-		break;
-	default:
-		fprintf(stderr, "Unitialized value used at %s %d\n", __FILE__, __LINE__);
-		exit(0);
-		break;
-	}
-
-	// calculate slope of tile edges on screen
-	float tileEdgeSlopeRight = (float)(mapCornerRight.y - mapCornerBot.y) / (float)(mapCornerRight.x - mapCornerBot.x);
-	float tileEdgeSlopeLeft = (float)(mapCornerBot.y - mapCornerLeft.y) / (float)(mapCornerBot.x - mapCornerLeft.x);
-	/////////
-
-	// these coordinates will be the bounds at which renderColumn() will render any terrain
-	int leftMostXCoord = maxf((int)mapCornerLeft.x, 0);
-	int rightMostXCoord = minf((int)mapCornerRight.x, window.drawSize.w);
-
-	for (int x = leftMostXCoord; x < rightMostXCoord; x++)
-	{
-		int botMostYCoord;
-		int topMostYCoord;
-
-		if (x > mapCornerBot.x)
-		{
-			botMostYCoord = mapCornerBot.y + tileEdgeSlopeRight * (x - mapCornerBot.x);
-		}
-		else
-		{
-			botMostYCoord = mapCornerBot.y + tileEdgeSlopeLeft * (x - mapCornerBot.x);
-		}
-		if (x > mapCornerTop.x)
-		{
-			topMostYCoord = mapCornerTop.y + tileEdgeSlopeLeft * (x - mapCornerTop.x);
-		}
-		else
-		{
-			topMostYCoord = mapCornerTop.y + tileEdgeSlopeRight * (x - mapCornerTop.x);
-		}
-
-		topMostYCoord = topMostYCoord * !(topMostYCoord & 0x80000000); // Branchless topMostYCoord = maxf(topMostYCoord, 0);
-
-		vec2f_t worldCoord = screen2world(x, botMostYCoord, cam);
-
-		renderColumn(x, botMostYCoord, topMostYCoord, upVec, worldCoord.x, worldCoord.y, dDxw, dDyw, cam);
-	}
-
-	// for memory access pattern reasons the terrain gets drawn sideways. That's why we below transpose the framebuffer while copying it to the framebuffer
-	for (int y = 0; y < window.drawSize.h; y++)
-	{
-		int pixelPitch = y * window.drawSize.w;
-		int bufferPitch = window.drawSize.h - 1 - y;
-		for (int x = 0; x < window.drawSize.w; x++)
-		{
-			botLayer.frameBuffer[x + pixelPitch] = frameBuffer[bufferPitch + (x)*window.drawSize.w];
-		}
-	}
-
-	// Draw mouse position
-	for (int y = -1; y < 1; y++)
-	{
-		for (int x = -1; x < 1; x++)
-		{
-			if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
-			{
-				if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
-				{
-					topLayer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * topLayer.w] = rgb(255,0,0);
-				}
-			}
-		}
-	}
-
-    drawText(topLayer, 100, 130, printfLocal("Total amount of water: %f", totalWaterLevel));
-	char* simStr = ((key.Y) ? "GPU" : "Processor");
-    drawText(topLayer, 100, 160, printfLocal("Sim running on: %s", simStr));
-
-}
-
-
 
 static void init()
 {
@@ -2004,6 +1237,12 @@ static void init()
 	map.water.flow = calloc(map.w * map.h, sizeof(Fluid_flow));
 	map.water.vel = calloc(map.w * map.h, sizeof(vec2f_t));
 
+	renderMapBuffer.height = calloc(map.w * map.h, sizeof(float));
+	renderMapBuffer.mistDepth = calloc(map.w * map.h, sizeof(float));
+	renderMapBuffer.argb = calloc(map.w * map.h, sizeof(argb_t));
+	renderMapBuffer.argbBlured = calloc(map.w * map.h, sizeof(argb_t));
+
+
 	// init camera position, the following will init camera to center overview a 256x256 map
 	// camera: x:336.321991 y:-93.287224 rot:1.570000 zoom:0.609125camera: x:327.101379 y:-84.052345 rot:1.570000 zoom:0.609125
 	
@@ -2015,12 +1254,19 @@ static void init()
 	// 2048	-977,719	1287,959	0,184
 
 	// g_cam.x = 302.6;
-	g_cam.x = rendererSizeX * -0.8343 + 729.11;
+	g_cam.x = 0;//rendererSizeX * -0.8343 + 729.11;
 	// g_cam.y = -54.5;
-	g_cam.y = rendererSizeY * 0.8724 - 498.59;
-	g_cam.rot = 3.14f / 2;
+	g_cam.y = 0;//rendererSizeY * 0.8724 - 498.59;
+	g_cam.rot = 0.f;//3.14f / 2;
 	// g_cam.zoom = 0.726;
 	g_cam.zoom = 366.03 * pow(rendererSizeX, -0.996);
+
+	vec2f_t worldCenter = world2screen(map.w / 2, map.h / 2, g_cam);
+	vec2f_t screenCenter = {rendererSizeX / 2, rendererSizeY / 2};
+	vec2f_t centerDiff = {worldCenter.x - screenCenter.x, worldCenter.y - screenCenter.y};
+
+	cam_pan(&g_cam, centerDiff.x, centerDiff.y);
+	cam_rot(&g_cam, 0.f);
 
 	//Init tool values
 	cursor.amount = 10;
@@ -2055,23 +1301,17 @@ static void init()
 
 	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
 
+
 	map.flags.updateShadowMap = 1; // make sure shadows are updated after map load
 	map.flags.updateColorMap = 1;  // make sure shadows are updated after map load
 
-	// Create background for render
-	for (int x = 0; x < window.drawSize.w; x++)
-	{
-		// argb_t argb = (argb_t){.b = ((219 + x) >> 2), .g = (((182 + x) >> 2)), .r = (((92 + x) >> 2))};
-		argb_t argb = lerpargb(ARGB(255,25,47,56),ARGB(255,222,245,254),((float)x)/((float)window.drawSize.w)); //Gradient over rendersize
-		for (int y = 0; y < window.drawSize.h; y++)
-		{
 
-			background[window.drawSize.w - 1 - x + y * window.drawSize.w] = argb;
-			// if((x & 0x80) ^ (y & 0x80)){
-			// 	background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.water;
-			// }else{
-			// 	background[window.drawSize.w - 1 - x + y * window.drawSize.w] = pallete.sand;
-			// }
+	//make a tower of stone
+	for(int y=0;y<map.h;y++){
+		for(int x=0;x<map.w;x++){
+			if(x > 0 && x < 10 && y > 0 && y < 10){
+				map.stone[x + y * map.w] = 100.f;
+			}
 		}
 	}
 
@@ -2157,13 +1397,15 @@ static int mainLoop()
 
 	
 
-	updateInput();
+	PROFILE(updateInput();)
 
 
 
-	process();
+	PROFILE(process();)
 
 	//Update buffers that render will use
+	renderMapBuffer.mapW = map.w;
+	renderMapBuffer.mapH = map.h;
 	for(int i = 0; i < MAPW * MAPH; i++)
 	{
 		renderMapBuffer.height[i] = map.height[i];
@@ -2172,7 +1414,7 @@ static int mainLoop()
 		renderMapBuffer.argbBlured[i] = map.argbBlured[i];
 	}
 
-	PROFILE(render();)
+	PROFILE(render(botLayer, &renderMapBuffer);)
 
 
 	return window_run();
@@ -2226,37 +1468,7 @@ int main()
 #endif
 
 #ifdef DEBUG
-	#ifdef CSS_PROFILE_H_
-		//Print profile result
-		int nameWidth = 20; //Minimum 20
-		for(int i=0;i<css_profile.numberOfProfiles;i++){
-			int len = strlen(css_profile.profiles[i].id) + 1;
-			nameWidth = MAX(nameWidth, len);
-		}
-		
-
-
-		printf("\n Total runtime: %f seconds \n", (double)window.time.ms1 / 1000.0);
-
-		printf("\n");
-		printf("┏━┫Profiling results┣━"); for(int i=0;i<nameWidth - 20;i++){ printf("━");}                       printf("┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓\n");
-		printf("┃ Name "); for(int i=0;i<nameWidth - 5;i++){ printf(" ");}                                       printf("┃ noCalls ┃   low   ┃   avg   ┃   high  ┃       total       ┃\n");
-		printf("┣━"); for(int i=0;i<nameWidth;i++){ printf("━");}                                                printf("╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┫\n");
-		for(int i=0;i<=css_profile.numberOfProfiles;i++){
-			printf("┃ %s", css_profile.profiles[i].id); for(unsigned int j=0;j<nameWidth - strlen(css_profile.profiles[i].id);j++){ printf(" ");}
-			printf("│ %7d ", css_profile.profiles[i].numberOfCalls);
-			printf("│ %01.5f ", css_profile.profiles[i].lowTime);
-			printf("│ %01.5f ", css_profile.profiles[i].avgTime);
-			printf("│ %01.5f ", css_profile.profiles[i].highTime);
-			printf("│ %07.3f ", css_profile.profiles[i].totalTime);
-			double percentage = css_profile.profiles[i].totalTime / ((double)window.time.ms1 / 100000.0);
-			printf("(%06.2f%%) ", percentage);
-			printf("┃ \n");
-			if(i == css_profile.numberOfProfiles){ printf("┗━"); for(int i=0;i<nameWidth;i++){ printf("━");} printf("┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━┷━━━━━━━━━━━━━━━━━━━┛\n"); }
-			else{ printf("┠─"); for(int i=0;i<nameWidth;i++){ printf("─");}                                      printf("┼─────────┼─────────┼─────────┼─────────┼───────────────────┨\n"); }
-			
-		}
-	#endif
+	css_profile.print();
 #endif /*DEBUG*/
 
 

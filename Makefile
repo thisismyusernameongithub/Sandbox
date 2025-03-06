@@ -2,7 +2,7 @@
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
 APP_VER_MINOR = 10
-APP_VER_BUILD = 1190
+APP_VER_BUILD = 1431
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
 
@@ -14,7 +14,7 @@ BUILDDIR = build
 
 # Compiler flags etc.
 CFLAGS = -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-parameter
-LFLAGS = -L.\dependencies\lib -lgdi32 -lSDL2 -lSDL2_ttf -lm -lSDL2_image 
+LFLAGS = -L.\dependencies\lib -lgdi32 -lSDL2 -lSDL2_ttf -lm -lSDL2_image
 
 
 # Uncomment the following block to enable a full set of Clang sanitizers
@@ -36,15 +36,15 @@ CFLAGS += -g3 -D_FORTIFY_SOURCE=2 -fstack-clash-protection -fcf-protection=full 
 # LFLAGS += -Wl,-O3,--strip-all,--as-needed -flto -fuse-linker-plugin
 
 EMSFLAGS = -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 \
-           -sUSE_SDL_TTF=2 -sUSE_WEBGL2=1 -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sASSERTIONS -sGL_ASSERTIONS \
-           -sSTACK_SIZE=1048576 --emrun
+            -sUSE_SDL_TTF=2 -sUSE_WEBGL2=1 -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sASSERTIONS -sGL_ASSERTIONS \
+            -sSTACK_SIZE=1048576 --emrun
 
 # Source files for native build (update these lists to add new files)
-NATIVE_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c
+NATIVE_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c globals.c render.c
 NATIVE_OBJS = $(patsubst %.c,$(BUILDDIR)/%.o,$(NATIVE_SRCS))
 
 # Source files for Emscripten build
-EM_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c
+EM_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c globals.c render.c
 EM_OBJS = $(patsubst %.c,$(BUILDDIR)/%_em.o,$(EM_SRCS))
 
 # Glad object files (common for both builds)
@@ -84,6 +84,12 @@ $(BUILDDIR)/terrainGeneration.o: $(SRCDIR)/terrainGeneration.c
 $(BUILDDIR)/camera.o: $(SRCDIR)/camera.c
 	gcc $(CFLAGS) -c $< -o $@
 
+$(BUILDDIR)/globals.o: $(SRCDIR)/globals.c
+	gcc $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/render.o: $(SRCDIR)/render.c
+	gcc $(CFLAGS) -c $< -o $@
+
 # Glad
 $(BUILDDIR)/glad.o: $(DEPDIR)/$(GLAD_SRC)
 	gcc $(CFLAGS) -c $< -o $@
@@ -108,6 +114,12 @@ $(BUILDDIR)/terrainGeneration_em.o: $(SRCDIR)/terrainGeneration.c
 	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/camera_em.o: $(SRCDIR)/camera.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/globals_em.o: $(SRCDIR)/globals.c
+	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/render_em.o: $(SRCDIR)/render.c
 	C:\Users\dwtys\emsdk\upstream\emscripten\emcc $(CFLAGS) -c $< -o $@
 
 # Glad for emscripten

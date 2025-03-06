@@ -5,11 +5,15 @@
 
 typedef struct{
     float x, y;
-	float rot;
+	float rot; // 0-2*PI
 	float zoom;
     struct{
         float zoomMax;
         float zoomMin;
+		float xMax;
+		float xMin;
+		float yMax;
+		float yMin;
     }limits;
 	enum
 	{
@@ -28,5 +32,11 @@ vec2f_t screen2world(float x, float y, camera_t camera);
 
 // Zoom the camera by the given value
 void cam_zoom(camera_t* camPtr, float value);
+
+// Pan the camera by the given x and y values
+void cam_pan(camera_t* camPtr, float x, float y);
+
+// Rotate the camera by the given angle
+void cam_rot(camera_t* camPtr, float angle);
 
 #endif // CAMERA_H

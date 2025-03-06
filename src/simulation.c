@@ -235,10 +235,10 @@ void simFluid(fluid_t* restrict fluid, float* restrict terrain, const float g, f
 
 	if(visc == 0.f)
 	{
-		for (int y = 0; y < h - 0; y++)
+		for (int y = 1; y < h - 1; y++)
 		{
 			const int yw = y * w;
-			for (int x = 0; x < w - 0; x++)
+			for (int x = 1; x < w - 1; x++)
 			{
 				if((f[(x) + yw].depth) > 0.01f)
 				{
@@ -288,10 +288,10 @@ void simFluid(fluid_t* restrict fluid, float* restrict terrain, const float g, f
 	}
 	else
 	{
-		for (int y = 0; y < h - 0; y++)
+		for (int y = 1; y < h - 1; y++)
 		{
 			const int yw = y * w;
-			for (int x = 0; x < w - 0; x++)
+			for (int x = 1; x < w - 1; x++)
 			{
 				if((f[(x) + (y)*w].depth) > 0.01f)
 				{
@@ -533,10 +533,10 @@ void simFluidBackup(new_fluid_t* restrict fluid, float* restrict terrain, const 
 	float friction_dTime = 1.f - dTime * (1.f - friction);
 
 	// if(visc == 0.f){
-		for (int y = 0; y < h - 0; y++)
+		for (int y = 1; y < h - 1; y++)
 		{
 			const int yw = y * w;
-			for (int x = 0; x < w - 0; x++)
+			for (int x = 1; x < w - 1; x++)
 			{
 				// if((f->depth[(x) + (y)*w]) > 0.01f){
 					f->flow[x + yw].right = maxf(f->flow[x + yw].right * friction_dTime + (f->depth[x + yw] + t[x + yw] - f->depth[(x + 1) + (yw)]    - t[(x + 1) + yw]      ) * dTime * A * g / l, 0.f);					   
