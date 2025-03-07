@@ -60,8 +60,8 @@ int NEWFEATURE = 1;
 float newFloat = 0.79f;
 
 
-#define MAPW 256
-#define MAPH 256
+#define MAPW 512
+#define MAPH 512
 
 #define windowSizeX 1024	
 #define windowSizeY 1024
@@ -202,7 +202,7 @@ struct{
 //Function prototypes from terrainGeneration.c
 void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset, int mapW, int mapH, float* stoneMap, float* sandMap);
 void erode(int w, int h, float* stone, float* sand);
-void erodeOld(int w, int h, float* stone, float* sand);
+void oldErode(int w, int h, float* stone, float* sand);
 
 
 
@@ -512,11 +512,15 @@ static void updateInput(){
 
 
 
-	if (key.I == eKEY_HELD){
-		PROFILE(erode(map.w, map.h, map.stone, map.sand);)
+	if (key.I == eKEY_PRESSED){
+		for(int i=0;i<100;i++){
+			PROFILE(erode(map.w, map.h, map.stone, map.sand);)
+		}
 	}
-	if (key.O == eKEY_HELD){
-		PROFILE(erodeOld(map.w, map.h, map.stone, map.sand);)
+	if (key.O == eKEY_PRESSED){
+		for(int i=0;i<100;i++){
+			PROFILE(oldErode(map.w, map.h, map.stone, map.sand);)
+		}
 	}
 	if (key.L == eKEY_PRESSED){
 		NEWFEATURE = (NEWFEATURE) ? 0 : 1;
