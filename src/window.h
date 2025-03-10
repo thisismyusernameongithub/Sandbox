@@ -347,6 +347,8 @@ typedef struct{
 	uint32_t VAO;
 	//framebuffer object
 	uint32_t fbo;
+	//Render buffer object
+	uint32_t rbo; 
 	//Texture ID storage
 	uint32_t textureIn[16];
 	uint32_t textureOut[16];

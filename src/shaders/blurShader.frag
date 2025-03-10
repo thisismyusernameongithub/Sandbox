@@ -40,5 +40,8 @@ void main() {
     // Normalize the blurColor by the sum of weights
     blurColor /= weightSum;
 
+    // Brighten color slightly (This is just personal preference, I feel like the average color you get from the blur is darker than the original colors)
+    blurColor = clamp(blurColor * 1.05, 0.0, 1.0);
+
     FragColor = blurColor;
 }

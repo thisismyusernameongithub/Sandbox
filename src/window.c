@@ -1442,7 +1442,7 @@ uint32_t compileShaderProgram(char* vertexShaderPath, char* fragmentShaderPath){
     if (!vertexSuccess) {
         char infoLog[512];
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        printf("Shader compilation failed\n%s\n", infoLog);
+		errLog("Vertex shader compilation failed for %s\n%s\n", vertexShaderPath, infoLog);
 		return 0;
     }
 
@@ -1460,7 +1460,7 @@ uint32_t compileShaderProgram(char* vertexShaderPath, char* fragmentShaderPath){
     if (!fragmentSuccess) {
         char infoLog[512];
         glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        errLog("Shader compilation failed\n%s\n", infoLog);
+        errLog("Fragment shader compilation failed for %s\n%s\n", fragmentShaderPath, infoLog);
 		return 0;
     }
 

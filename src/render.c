@@ -12,7 +12,7 @@ argb_t* frameBuffer;
 argb_t* background; // Stores background image that get copied to framebuffer at start of render
 
 
-
+extern camera_t g_cam;
 
 
 static void initRenderStuff();
@@ -20,59 +20,9 @@ static argb_t getTileColorMist(RenderMapBuffer* renderMapBuffer, int x, int y, i
 static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int yTop, vec2f_t upVec, float xwt, float ywt, float dDxw, float dDyw, camera_t camera);
 void drawUI(Layer layer);
 
-argb_t getTileColorMist(RenderMapBuffer* renderMapBuffer, int x, int y, int ys, vec2f_t upVec)
-{
-    argb_t argb = rgb(255,0,0);
-    int mapW = renderMapBuffer->mapW;
-    int mapH = renderMapBuffer->mapH;
+// #define RENDERER_CPU
 
-    float mistHeight =  renderMapBuffer->height[x+y*mapW] + renderMapBuffer->mistDepth[x+y*mapW];
-
-    float d;
-    for(d = 0.f; d < 300.f; d += 1.f){
-        int X = x + upVec.x * d;
-        int Y = y + upVec.y * d;
-        if(X >= 0 && X < mapW && Y >= 0 && Y < mapH){
-            if(renderMapBuffer->height[(int)(x+upVec.x*d)+(int)(y+upVec.y*d)*mapW] > mistHeight - (d * 0.79f)){ //0.7071f = 1/sqrt(2)
-
-                argb = renderMapBuffer->argb[X+Y*mapW];
-
-                argb = lerpargb(argb, renderMapBuffer->argbBlured[X+Y*mapW], minf(d/10.f, 1.f));
-
-                break;
-            }
-        }else{
-            
-            //If the mist is up against the wall, sample the background picture to make it appear transparent
-            //I don't know why the coordinates are like this, I just tried stuff until it worked....
-            argb.r = background[window.drawSize.h - ys].r; //(102+(int)ys)>>2;//67
-            argb.g = background[window.drawSize.h - ys].g; //(192+(int)ys)>>2;//157
-            argb.b = background[window.drawSize.h - ys].b; //(229+(int)ys)>>2;//197
-
-            break;
-
-        }
-    }
-
-    
-    // vec2f_t a = world2screen(upVec.x, upVec.y, g_cam);
-    // vec2f_t b = world2screen(upVec.x + 1.f, upVec.y + 1.f, g_cam);
-    // printf("%f %f %f %f %f\n",a.x, a.y, b.x, b.y, b.y-a.y);
-
-
-    argb = lerpargb(argb, pallete.mist, minf(d/50.f, 1.f));
-
-
-
-    // argb.r = lerp(argb.r, pallete.white.r, mistDensity);
-    // argb.g = lerp(argb.g, pallete.white.g, mistDensity);
-    // argb.b = lerp(argb.b, pallete.white.b, mistDensity);
-
-    return argb;
-    
-}
-
-
+#ifdef RENDERER_CPU
 
 // renders one pixel column
 static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int yTop, vec2f_t upVec, float xwt, float ywt, float dDxw, float dDyw, camera_t camera)
@@ -103,7 +53,7 @@ static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int 
         int ywti = (int)ywt;
         int xwti = (int)xwt;
 
-        ys = y - (renderMapBuffer->height[xwti + ywti * mapW] + renderMapBuffer->mistDepth[xwti + ywti * mapW]) * camZoomDivBySqrt2;  // offset y by terrain height (sqr(2) is to adjust for isometric projection)
+        ys = y - (renderMapBuffer->height[xwti + ywti * mapW]) * camZoomDivBySqrt2;  // offset y by terrain height (sqr(2) is to adjust for isometric projection)
 
         ys = ys * !(ys & 0x80000000);			// Non branching version of : ys = maxf(ys, 0);
 
@@ -113,11 +63,11 @@ static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int 
             register argb_t argb; // store color of Pixel that will be drawn
 
             // draw mist if present
-            if (renderMapBuffer->mistDepth[xwti + ywti * mapW] > 0.f)    
-            {
-                argb = getTileColorMist(renderMapBuffer, xwti, ywti, ys, upVec);
-            } 
-            else 
+            // if (renderMapBuffer->mistDepth[xwti + ywti * mapW] > 0.f)    
+            // {
+            //     argb = getTileColorMist(renderMapBuffer, xwti, ywti, ys, upVec);
+            // } 
+            // else 
             {
                 argb = renderMapBuffer->argb[xwti + ywti * mapW];
             }
@@ -452,3 +402,246 @@ static void initRenderStuff()
     }
 
 }
+
+#else
+
+#include "../dependencies/include/glad/glad.h"
+
+
+void render(Layer layer, RenderMapBuffer* renderMapBuffer)
+{
+    static Shader shader = {
+        .state = eSHADERSTATE_UNINITIALIZED,
+        .vertexShaderSource = "src/shaders/isometric.vert",
+        .fragmentShaderSource = "src/shaders/isometric.frag"
+    };
+    static uint32_t heightTexture;
+    static uint32_t colorTexture;
+    static uint32_t outputTexture;
+    static float* heightData = NULL;
+    static argb_t* colorData = NULL;
+
+    extern camera_t g_cam;
+    
+    int mapW = renderMapBuffer->mapW;
+    int mapH = renderMapBuffer->mapH;
+
+    // First time this function is called, create resources
+    static bool firstTime = true;
+    if (firstTime) {
+        initRenderStuff();
+        firstTime = false;
+    }
+
+    switch(shader.state) {
+        case eSHADERSTATE_UNINITIALIZED:
+            // Allocate memory for textures
+            heightData = malloc(mapW * mapH * sizeof(float));
+            colorData = malloc(mapW * mapH * sizeof(argb_t));
+            
+            // Copy height and color data from renderMapBuffer
+            for (int i = 0; i < mapW * mapH; i++) {
+                heightData[i] = renderMapBuffer->height[i];
+                colorData[i] = renderMapBuffer->argb[i];
+            }
+            
+            shader.width = window.drawSize.w;
+            shader.height = window.drawSize.h;
+            
+            // Compile shader program
+            shader.program = compileShaderProgram(shader.vertexShaderSource, shader.fragmentShaderSource);
+            if (shader.program == 0) {
+                shader.state = eSHADERSTATE_FAILED;
+                return;
+            }
+            
+            // Create height texture
+            glGenTextures(1, &heightTexture);
+            glBindTexture(GL_TEXTURE_2D, heightTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, mapW, mapH, 0, GL_RED, GL_FLOAT, heightData);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            
+            // Create color texture
+            glGenTextures(1, &colorTexture);
+            glBindTexture(GL_TEXTURE_2D, colorTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mapW, mapH, 0, GL_RGBA, GL_UNSIGNED_BYTE, colorData);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            
+            // Create output texture
+            glGenTextures(1, &outputTexture);
+            glBindTexture(GL_TEXTURE_2D, outputTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, shader.width, shader.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            
+            // Create framebuffer
+            glGenFramebuffers(1, &(shader.fbo));
+            glBindFramebuffer(GL_FRAMEBUFFER, shader.fbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, outputTexture, 0);
+            
+            // Create render buffer for depth and stencil
+            glGenRenderbuffers(1, &(shader.rbo));
+            glBindRenderbuffer(GL_RENDERBUFFER, shader.rbo);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, shader.width, shader.height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, shader.rbo);
+            
+            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+                printf("Framebuffer not complete!\n");
+                shader.state = eSHADERSTATE_FAILED;
+                return;
+            }
+            
+            // Define vertices and indices for a fullscreen quad
+            float vertices[] = {
+                // positions          // texture coords
+                 1.0f,  1.0f, 0.0f,   1.0f, 1.0f, // top right
+                 1.0f, -1.0f, 0.0f,   1.0f, 0.0f, // bottom right
+                -1.0f, -1.0f, 0.0f,   0.0f, 0.0f, // bottom left
+                -1.0f,  1.0f, 0.0f,   0.0f, 1.0f  // top left 
+            };
+            
+            unsigned int indices[] = {  
+                0, 1, 3, // first triangle
+                1, 2, 3  // second triangle
+            };  
+            
+            glGenVertexArrays(1, &(shader.VAO));
+            glGenBuffers(1, &(shader.VBO));
+            glGenBuffers(1, &(shader.EBO));
+            
+            glBindVertexArray(shader.VAO);
+            
+            glBindBuffer(GL_ARRAY_BUFFER, shader.VBO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+            
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, shader.EBO);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+            
+            // position attribute
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+            glEnableVertexAttribArray(0);
+            
+            // texture coord attribute
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+            glEnableVertexAttribArray(1);
+            
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+            glBindVertexArray(0);
+            
+            shader.state = eSHADERSTATE_INITIALIZED;
+            break;
+            
+        case eSHADERSTATE_INITIALIZED:
+            // Update the texture data
+            for (int i = 0; i < mapW * mapH; i++) {
+                heightData[i] = renderMapBuffer->height[i];
+                colorData[i] = renderMapBuffer->argb[i];
+            }
+            
+            glBindTexture(GL_TEXTURE_2D, heightTexture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mapW, mapH, GL_RED, GL_FLOAT, heightData);
+            
+            glBindTexture(GL_TEXTURE_2D, colorTexture);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mapW, mapH, GL_RGBA, GL_UNSIGNED_BYTE, colorData);
+            
+            // Render to framebuffer
+            glBindFramebuffer(GL_FRAMEBUFFER, shader.fbo);
+            glViewport(0, 0, shader.width, shader.height);
+            
+            // Clear the buffer
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
+            // Use shader program
+            glUseProgram(shader.program);
+            
+            // Set uniforms
+            glUniform1i(glGetUniformLocation(shader.program, "mapWidth"), mapW);
+            glUniform1i(glGetUniformLocation(shader.program, "mapHeight"), mapH);
+            glUniform1f(glGetUniformLocation(shader.program, "cameraZoom"), g_cam.zoom);
+            glUniform2f(glGetUniformLocation(shader.program, "cameraPos"), g_cam.x, g_cam.y);
+            glUniform1f(glGetUniformLocation(shader.program, "cameraRot"), g_cam.rot);
+            glUniform2f(glGetUniformLocation(shader.program, "screenSize"), (float)shader.width, (float)shader.height);
+            
+            // Bind textures
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, heightTexture);
+            glUniform1i(glGetUniformLocation(shader.program, "heightMap"), 0);
+            
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, colorTexture);
+            glUniform1i(glGetUniformLocation(shader.program, "colorMap"), 1);
+            
+            // Draw quad
+            glBindVertexArray(shader.VAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            
+            // Read the rendered image back to CPU
+            argb_t* outputBuffer = malloc(shader.width * shader.height * sizeof(argb_t));
+            glReadPixels(0, 0, shader.width, shader.height, GL_RGBA, GL_UNSIGNED_BYTE, outputBuffer);
+            
+            // Copy to the layer's framebuffer with Y-flip (OpenGL has bottom-left origin)
+            for (int y = 0; y < shader.height; y++) {
+                for (int x = 0; x < shader.width; x++) {
+                    int srcIdx = x + (shader.height - 1 - y) * shader.width;
+                    int destIdx = x + y * layer.w;
+                    layer.frameBuffer[destIdx] = outputBuffer[srcIdx];
+                }
+            }
+            
+            free(outputBuffer);
+            
+            // Return to default framebuffer
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            break;
+            
+        case eSHADERSTATE_FAILED:
+            printf("Shader failed to initialize! Falling back to simple rendering.\n");
+            
+            // Simple fallback rendering - just clear to blue
+            for (int i = 0; i < layer.w * layer.h; i++) {
+                layer.frameBuffer[i] = rgb(0, 0, 255);
+            }
+            
+            // Check for OpenGL errors
+            GLenum error = glGetError();
+            if (error != GL_NO_ERROR) {
+                printf("OpenGL error: %X\n", error);
+            }
+            break;
+    }
+    
+    // Draw a dot in the middle of the screen
+    layer.frameBuffer[window.drawSize.w / 2 + (window.drawSize.h / 2) * window.drawSize.w] = rgb(255, 0, 0);
+}
+
+
+
+
+static void initRenderStuff()
+{
+
+    // Allocate memory needed
+    frameBuffer = malloc(window.drawSize.w * window.drawSize.h * sizeof(argb_t));
+    background = malloc(window.drawSize.w * window.drawSize.h * sizeof(argb_t));
+
+    // Fill out background with colors
+    for (int x = 0; x < window.drawSize.w; x++)
+    {
+        // argb_t argb = (argb_t){.b = ((219 + x) >> 2), .g = (((182 + x) >> 2)), .r = (((92 + x) >> 2))};
+        argb_t argb = lerpargb(ARGB(255,25,47,56),ARGB(255,222,245,254),((float)x)/((float)window.drawSize.w)); //Gradient over rendersize
+        for (int y = 0; y < window.drawSize.h; y++)
+        {
+            background[window.drawSize.w - 1 - x + y * window.drawSize.w] = argb;
+        }
+    }
+
+}
+
+#endif

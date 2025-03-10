@@ -184,7 +184,7 @@ TerrainGen terrainGen = {
 	.autoGenerate = 0,
 	.maxHeight = 100.f,
 	.detail = 1.f,
-	.sand = 0.0f,
+	.sand = 0.5f,
 	.x = 0.f,
 	.y = 0.f
 };
@@ -218,8 +218,10 @@ Layer botLayer;
 Layer topLayer;
 
 
+extern argb_t* background; //Declared in render.c, needed here for transparent mist agains edge of map
 
 
+//Functions
 
 EMSCRIPTEN_KEEPALIVE
 void selectToolStone()
@@ -735,6 +737,68 @@ static void generateShadowMap()
 }
 
 
+argb_t getTileColorMist(Map* mapPtr, int x, int y, int ys, vec2f_t upVec)
+{
+    argb_t argb;
+    int mapW = mapPtr->w;
+    int mapH = mapPtr->h;
+
+    float mistHeight =  mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water.depth[x+y*mapW] + mapPtr->lava[x+y*mapW].depth + mapPtr->mist[x+y*mapW].depth;
+
+	// Shoot a ray from the camera perspective down from the mist tile until it hit the ground, there sample the ground color
+    float d; // How far the ray had to travel to reach the ground
+	float mistDepth = 0.f; // How far the ray had to travel through mist
+	float stepSize = 0.99f; // How far the ray travels each step
+    for(d = 0.f; d < 300.f; d += stepSize)
+	{
+        int X = x + upVec.x * d; // Current x position of the ray
+        int Y = y + upVec.y * d; // Current y position of the ray
+		float rayHeight = mistHeight - (d * 0.79f); // Current height of the ray  //0.7071f = 1/sqrt(2)
+        if(X >= 0 && X < mapW && Y >= 0 && Y < mapH)
+		{
+
+			// The ray can enter and leave masses of mist while traveling to the ground, we add mistDepth whenever the ray travel through mist
+			if( mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water.depth[x+y*mapW] + mapPtr->lava[x+y*mapW].depth + mapPtr->mist[X+Y*mapW].depth > rayHeight )
+			{
+				mistDepth += stepSize;
+			}
+
+			// Detect ray collision with ground
+            if( mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water.depth[x+y*mapW] + mapPtr->lava[x+y*mapW].depth > rayHeight )
+			{
+
+                argb = lerpargb(mapPtr->argb[X+Y*mapW], mapPtr->argbBlured[X+Y*mapW], clampf(mistDepth/20.f, 0.1f, 1.f));
+
+                break;
+            }
+        }
+		else
+		{
+
+			int yScreen = world2screen(X, Y, g_cam).y; // Get the screen y position of the ray
+            
+            //If the mist is up against the wall, sample the background picture to make it appear transparent
+            //I don't know why the coordinates are like this, I just tried stuff until it worked....
+            // argb.r = background[window.drawSize.h - ys].r; //(102+(int)ys)>>2;//67
+            // argb.g = background[window.drawSize.h - ys].g; //(192+(int)ys)>>2;//157
+            // argb.b = background[window.drawSize.h - ys].b; //(229+(int)ys)>>2;//197
+			argb = background[window.drawSize.h - yScreen];
+
+            break;
+
+        }
+
+    }
+
+	// Apply mist color based on depth
+    argb = lerpargb(argb, pallete.mist, clampf(mistDepth/50.f, 0.1f, 1.f));
+
+    return argb;
+    
+}
+
+
+
 static void generateColorMap()
 {
 	map.flags.updateColorMap = false;
@@ -745,6 +809,8 @@ static void generateColorMap()
 	vec2f_t fbl = screen2world(0, window.drawSize.h, g_cam);
 	vec2f_t upVec = {ftl.x - fbl.x, ftl.y - fbl.y};
 	upVec = normalizeVec2f(upVec);
+
+
 
 	for (int y = 0; y < map.h; y++)
 	{
@@ -843,12 +909,8 @@ static void generateColorMap()
 				argb = lerpargb(argb, pallete.foam, minf(map.foamLevel[x + mapPitch] / 10.f, 1.f));
 			}
 
-			//Add shadowmap if no lava because lava is emmisive
-			if(!map.present[x + mapPitch].lava){
-				argb.r *= map.shadow[x + mapPitch];
-				argb.g *= map.shadow[x + mapPitch];
-				argb.b *= map.shadow[x + mapPitch];
-			}
+
+
 
 			map.argb[x + mapPitch] = argb;
 		}
@@ -945,7 +1007,37 @@ static void generateColorMap()
 
 	}
 	
+	// Uncomment to check result of blur shader
+	// memcpy(map.argb, map.argbBlured, sizeof(map.argbBlured) / 2);
 	
+	for (int y = 0; y < map.h; y++)
+	{
+		int mapPitch = y * map.w;
+		for (int x = 0; x < map.w; x++)
+		{
+			//Add mist if present
+			if (map.mist[x + mapPitch].depth > 0)
+			{
+				map.argbBuffer[x + mapPitch] = getTileColorMist(&map, x, y, y, upVec);
+			}
+			else
+			{
+				map.argbBuffer[x + mapPitch] = map.argb[x + mapPitch];
+			}
+
+			//Add shadowmap if no lava because lava is emmisive
+			if(!map.present[x + mapPitch].lava){
+				map.argbBuffer[x + mapPitch].r *= map.shadow[x + mapPitch];
+				map.argbBuffer[x + mapPitch].g *= map.shadow[x + mapPitch];
+				map.argbBuffer[x + mapPitch].b *= map.shadow[x + mapPitch];
+			}
+		}
+	}
+
+	//TODO: Could be optimized by pointer swap?
+	for(int i=0;i<map.w*map.h;i++){
+		map.argb[i] = map.argbBuffer[i];
+	}
 	
 }
 
@@ -1147,6 +1239,13 @@ static void simulation(float dTime)
 
     PROFILE(simFluid(map.mist, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.90f, minf(dTime*program.simSpeed, 0.13f));)
 
+	//Add mist to height
+	for(int y=0;y<h;y++){
+		for(int x=0;x<w;x++){
+			map.height[x + y * w] += map.mist[x + y * w].depth;
+		}
+	}
+
 
 	//Handle border conditions of fluids
 	for (int y = 0; y < h; y++)
@@ -1270,7 +1369,7 @@ static void init()
 	vec2f_t centerDiff = {worldCenter.x - screenCenter.x, worldCenter.y - screenCenter.y};
 
 	cam_pan(&g_cam, centerDiff.x, centerDiff.y);
-	cam_rot(&g_cam, 0.f);
+	cam_rot(&g_cam, M_PI / 2.f);
 
 	//Init tool values
 	cursor.amount = 10;
@@ -1334,7 +1433,21 @@ static void init()
 			map.argbStone[x + y * map.w].r += (0.5f + r/2.f)*50.f - 50;
 			map.argbStone[x + y * map.w].g += (0.5f + r/2.f)*50.f - 50;
 			map.argbStone[x + y * map.w].b += (0.5f + r/2.f)*50.f - 50;
-			
+
+
+			#ifdef GENERATE_CHECKERBOARD
+			int tileSize = 32; // adjust tileSize for larger/smaller checkers
+			int check = ((x / tileSize) + (y / tileSize)) % 2;
+			if (check == 0) {
+				map.argbStone[x + y * map.w].r = 200;
+				map.argbStone[x + y * map.w].g = 50;
+				map.argbStone[x + y * map.w].b = 50;
+			} else {
+				map.argbStone[x + y * map.w].r = 50;
+				map.argbStone[x + y * map.w].g = 200;
+				map.argbStone[x + y * map.w].b = 200;
+			}
+			#endif
 
 		}
 	}
