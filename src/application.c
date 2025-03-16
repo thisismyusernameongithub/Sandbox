@@ -63,10 +63,10 @@ float newFloat = 0.79f;
 #define MAPW 512
 #define MAPH 512
 
-#define windowSizeX 1024	
-#define windowSizeY 1024
-#define rendererSizeX 1024
-#define rendererSizeY 1024
+#define windowSizeX 800	
+#define windowSizeY 800
+#define rendererSizeX 800
+#define rendererSizeY 800
 
 
 void drawUI(Layer layer);
@@ -114,10 +114,10 @@ struct{
 camera_t g_cam = {
     .limits.zoomMax = 0.5f,
     .limits.zoomMin = 0.03f,
-    .limits.yMax = 100.f,
-    .limits.yMin = -100.f,
-	.limits.xMax = 100.f,	
-	.limits.xMin = -100.f
+    .limits.yMax = 1000.f,
+    .limits.yMin = -1000.f,
+	.limits.xMax = 1000.f,	
+	.limits.xMin = -1000.f
 };
 
 
@@ -739,7 +739,7 @@ static void generateShadowMap()
 
 argb_t getTileColorMist(Map* mapPtr, int x, int y, int ys, vec2f_t upVec)
 {
-    argb_t argb;
+    argb_t argb = rgb(255,0,0);
     int mapW = mapPtr->w;
     int mapH = mapPtr->h;
 
@@ -1369,7 +1369,7 @@ static void init()
 	vec2f_t centerDiff = {worldCenter.x - screenCenter.x, worldCenter.y - screenCenter.y};
 
 	cam_pan(&g_cam, centerDiff.x, centerDiff.y);
-	cam_rot(&g_cam, M_PI / 2.f);
+	cam_rot(&g_cam, 0.f);
 
 	//Init tool values
 	cursor.amount = 10;

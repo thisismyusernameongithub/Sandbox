@@ -20,7 +20,7 @@ static argb_t getTileColorMist(RenderMapBuffer* renderMapBuffer, int x, int y, i
 static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int yTop, vec2f_t upVec, float xwt, float ywt, float dDxw, float dDyw, camera_t camera);
 void drawUI(Layer layer);
 
-// #define RENDERER_CPU
+#define RENDERER_CPU
 
 #ifdef RENDERER_CPU
 
@@ -293,7 +293,8 @@ void render(Layer layer, RenderMapBuffer* renderMapBuffer)
     vec2f_t trw = world2screen(mapW, 1, cam);
     vec2f_t blw = world2screen(1, mapH, cam);
     vec2f_t brw = world2screen(mapW, mapH, cam);
-    // check what relative postion map corners have
+
+    // check what relative position map corners have
     vec2f_t mapCornerTop, mapCornerLeft, mapCornerBot, mapCornerRight;
     switch (cam.direction)
     {
@@ -568,6 +569,10 @@ void render(Layer layer, RenderMapBuffer* renderMapBuffer)
             glUniform2f(glGetUniformLocation(shader.program, "cameraPos"), g_cam.x, g_cam.y);
             glUniform1f(glGetUniformLocation(shader.program, "cameraRot"), g_cam.rot);
             glUniform2f(glGetUniformLocation(shader.program, "screenSize"), (float)shader.width, (float)shader.height);
+            
+            // Add height scale uniform - adjust the value to control displacement intensity
+            float heightScaleValue = 0.2f; // Adjust this value to control the effect
+            glUniform1f(glGetUniformLocation(shader.program, "heightScale"), heightScaleValue);
             
             // Bind textures
             glActiveTexture(GL_TEXTURE0);
