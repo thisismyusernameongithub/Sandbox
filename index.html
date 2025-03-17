@@ -4,101 +4,106 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Sandbox</title>
-    <link href="style.css" rel="stylesheet" type="text/css">
   </head>
   <body style="background: rgb(236, 240, 241)">
 
     <!-- Create the canvas that the C++ code will draw into -->
-		<div style = "text-align:center;">
-      <div style = "display: flex; justify-content: center;">
+		<div style = "display: flex; justify-content: center;">
+      <fieldset style = "display: grid; grid-template-columns: auto auto; margin: 0;">
         <fieldset>
-          <legend>Tool</legend>
-          <div>
-            <input type="range" id="toolAmountSlider" 
-                name="toolAmountAmount" min="1" max="10" value="10" step="1"
-                oninput="toolAmountAmount.value=toolAmountSlider.value; changeToolAmount_cwrap(toolAmountSlider.value)">                                                       
-            <output name="ToolAmountAmount" id="toolAmountAmount" for="toolAmountSlider">10</output>
-            <label for="toolAmountAmount">Amount</label>
-          </div>
+          <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
 
-          <div>
-            <input type="range" id="toolRadiusSlider" 
-                name="toolRadiusSlider" min="5" max="100" value="15" step="1"
-                oninput="toolRadiusAmount.value=toolRadiusSlider.value; changeToolRadius_cwrap(toolRadiusSlider.value)">                                                       
-            <output name="ToolRadiusAmount" id="toolRadiusAmount" for="toolRadiusSlider">15</output>
-            <label for="toolRadiusAmount">Radius</label>
-          </div>
-
-
-          <div class="button" onclick="selectToolStone_cwrap()">
-            <input type="radio" id="Stone" name="check-substitution-2" />
-            <label for="Stone">Stone</label>
-          </div>
-          <div class="button" onclick="selectToolSand_cwrap()" >
-            <input type="radio" id="Sand" name="check-substitution-2" />
-            <label for="Sand">Sand</label>
-          </div>
-          <div class="button" onclick="selectToolWater_cwrap()">
-            <input type="radio" id="Water" name="check-substitution-2" />
-            <label for="Water">Water</label>
-          </div>
-          <div class="button" onclick="selectToolLava_cwrap()">
-            <input type="radio" id="Lava" name="check-substitution-2" />
-            <label for="Lava">Lava</label>
-          </div>
-          <div class="button" onclick="selectToolMist_cwrap()">
-            <input type="radio" id="Mist" name="check-substitution-2" />
-            <label for="Mist">Mist</label>
-          </div>
-          <div class="button" onclick="selectToolFoam_cwrap()">
-            <input type="radio" id="Foam" name="check-substitution-2" />
-            <label for="Foam">Foam</label>
-          </div>
         </fieldset>
-        <fieldset>
-          <legend>Map generation</legend>
-          <div>
-            <input type="range" id="mapGenDetailSlider" 
-                name="mapGenDetailSlider" min="0.1" max="1.0" value="1.0" step="0.1"
-                oninput="mapGenDetailAmount.value=mapGenDetailSlider.value; changeMapGenDetail_cwrap(mapGenDetailSlider.value)">                                                       
-            <output name="mapGenDetailAmount" id="mapGenDetailAmount" for="toolRadiusSlider" style="color:transparent;">9</output>
-            <label for="mapGenDetailAmount">Detail</label>
-          </div>
-          <div>
-            <input type="range" id="sandHeightSlider" 
-                name="sandHeightSlider" min="0" max="1" value="0.4" step="0.01"
-                oninput="sandHeightAmount.value=sandHeightSlider.value; changeSandHeight_cwrap(sandHeightSlider.value)">                                                       
-            <output name="sandHeightAmount" id="sandHeightAmount" for="sandHeightSlider" >0.4</output>
-            <label for="sandHeightAmount">Sand</label>
-          </div>
+        <div style="display: grid; grid-template-rows: auto auto; gap: 10px; align-content: start;">
           <fieldset>
-            <legend>Coordinates</legend>
+            <legend>Tool</legend>
             <div>
-              <input type="range" id="mapGenXSlider"
-                  name="mapGenXSlider" min="0" max="1000" value="0" step="1"
-                  oninput="mapGenXAmount.value=mapGenXSlider.value; changemapGenX_cwrap(mapGenXSlider.value)">                                                       
-              <output name="mapGenXlAmount" id="mapGenXAmount" for="mapGenXSlider" >0</output>
-              <label for="mapGenXAmount">X</label>
+              <input type="range" id="toolAmountSlider" 
+                  name="toolAmountAmount" min="1" max="10" value="10" step="1"
+                  oninput="toolAmountAmount.value=toolAmountSlider.value; changeToolAmount_cwrap(toolAmountSlider.value)">                                                       
+              <output name="ToolAmountAmount" id="toolAmountAmount" for="toolAmountSlider">10</output>
+              <label for="toolAmountAmount">Amount</label>
             </div>
+
             <div>
-              <input type="range" id="mapGenYSlider" 
-                  name="mapGenYSlider" min="0" max="1000" value="0" step="1"
-                  oninput="mapGenYAmount.value=mapGenYSlider.value; changemapGenY_cwrap(mapGenYSlider.value)">                                                       
-              <output name="mapGenYAmount" id="mapGenYAmount" for="mapGenYSlider" >0</output>
-              <label for="mapGenYAmount">Y</label>
+              <input type="range" id="toolRadiusSlider" 
+                  name="toolRadiusSlider" min="5" max="100" value="15" step="1"
+                  oninput="toolRadiusAmount.value=toolRadiusSlider.value; changeToolRadius_cwrap(toolRadiusSlider.value)">                                                       
+              <output name="ToolRadiusAmount" id="toolRadiusAmount" for="toolRadiusSlider">15</output>
+              <label for="toolRadiusAmount">Radius</label>
+            </div>
+
+
+            <div class="button" onclick="selectToolStone_cwrap()">
+              <input type="radio" id="Stone" name="check-substitution-2" />
+              <label for="Stone">Stone</label>
+            </div>
+            <div class="button" onclick="selectToolSand_cwrap()" >
+              <input type="radio" id="Sand" name="check-substitution-2" />
+              <label for="Sand">Sand</label>
+            </div>
+            <div class="button" onclick="selectToolWater_cwrap()">
+              <input type="radio" id="Water" name="check-substitution-2" />
+              <label for="Water">Water</label>
+            </div>
+            <div class="button" onclick="selectToolLava_cwrap()">
+              <input type="radio" id="Lava" name="check-substitution-2" />
+              <label for="Lava">Lava</label>
+            </div>
+            <div class="button" onclick="selectToolMist_cwrap()">
+              <input type="radio" id="Mist" name="check-substitution-2" />
+              <label for="Mist">Mist</label>
+            </div>
+            <div class="button" onclick="selectToolFoam_cwrap()">
+              <input type="radio" id="Foam" name="check-substitution-2" />
+              <label for="Foam">Foam</label>
             </div>
           </fieldset>
-          <div>
-            <div >
-              <button onclick="generateMap_cwrap()">Generate</button>
-              <input type="checkbox" id="autoGenerateCheckbox" onInput="setAutoGenerate_cwrap(autoGenerateCheckbox.checked)"> Autogenerate
-              
+          <fieldset>
+            <legend>Map generation</legend>
+            <div>
+              <input type="range" id="mapGenDetailSlider" 
+                  name="mapGenDetailSlider" min="0.1" max="1.0" value="1.0" step="0.1"
+                  oninput="mapGenDetailAmount.value=mapGenDetailSlider.value; changeMapGenDetail_cwrap(mapGenDetailSlider.value)">                                                       
+              <output name="mapGenDetailAmount" id="mapGenDetailAmount" for="toolRadiusSlider" style="color:transparent;">9</output>
+              <label for="mapGenDetailAmount">Detail</label>
             </div>
+            <div>
+              <input type="range" id="sandHeightSlider" 
+                  name="sandHeightSlider" min="0" max="1" value="0.4" step="0.01"
+                  oninput="sandHeightAmount.value=sandHeightSlider.value; changeSandHeight_cwrap(sandHeightSlider.value)">                                                       
+              <output name="sandHeightAmount" id="sandHeightAmount" for="sandHeightSlider" >0.4</output>
+              <label for="sandHeightAmount">Sand</label>
+            </div>
+            <fieldset>
+              <legend>Coordinates</legend>
+              <div>
+                <input type="range" id="mapGenXSlider"
+                    name="mapGenXSlider" min="0" max="1000" value="0" step="1"
+                    oninput="mapGenXAmount.value=mapGenXSlider.value; changemapGenX_cwrap(mapGenXSlider.value)">                                                       
+                <output name="mapGenXlAmount" id="mapGenXAmount" for="mapGenXSlider" >0</output>
+                <label for="mapGenXAmount">X</label>
+              </div>
+              <div>
+                <input type="range" id="mapGenYSlider" 
+                    name="mapGenYSlider" min="0" max="1000" value="0" step="1"
+                    oninput="mapGenYAmount.value=mapGenYSlider.value; changemapGenY_cwrap(mapGenYSlider.value)">                                                       
+                <output name="mapGenYAmount" id="mapGenYAmount" for="mapGenYSlider" >0</output>
+                <label for="mapGenYAmount">Y</label>
+              </div>
+            </fieldset>
+            <div>
+              <div >
+                <button onclick="generateMap_cwrap()">Generate</button>
+                <input type="checkbox" id="autoGenerateCheckbox" onInput="setAutoGenerate_cwrap(autoGenerateCheckbox.checked)"> Autogenerate
+                
+              </div>
 
-          </div>
-        </fieldset>
-      </div>
-    	<canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+            </div>
+          </fieldset>
+        </div>
+      </fieldset>
+    	
     </div>
     <div id="loadingDiv">Loading...</div>
     <!-- Allow the C++ to access the canvas element --> 
