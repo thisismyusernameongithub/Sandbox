@@ -60,8 +60,8 @@ int NEWFEATURE = 1;
 float newFloat = 0.79f;
 
 
-#define MAPW 512
-#define MAPH 512
+#define MAPW 256
+#define MAPH 256
 
 #define windowSizeX 800	
 #define windowSizeY 800
@@ -136,8 +136,8 @@ typedef struct{
 	float stone[MAPW * MAPH];
 	float sand[MAPW * MAPH];
 	// fluidSWE_t waterSWE;
-	new_fluid_t water;
-	// fluid_t water[MAPW * MAPH];
+	// new_fluid_t water;
+	fluid_t water[MAPW * MAPH];
 	vec2f_t waterVel[MAPW * MAPH]; // X/Y
 	fluid_t mist[MAPW * MAPH];
 	fluid_t lava[MAPW * MAPH];
@@ -349,7 +349,7 @@ static void updateInput(){
 				case TOOL_WATER:
 					if (r > radius / 4){ continue; } //Fluids need smaller circle or we get a huge area of this fluid
 					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						map.water.depth[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.water.depth[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+						map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth = maxf(map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
                         map.present[cursor.worldX+cursor.worldY*map.w].water = 1;
 					}
 					break;
@@ -743,7 +743,7 @@ argb_t getTileColorMist(Map* mapPtr, int x, int y, int ys, vec2f_t upVec)
     int mapW = mapPtr->w;
     int mapH = mapPtr->h;
 
-    float mistHeight =  mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water.depth[x+y*mapW] + mapPtr->lava[x+y*mapW].depth + mapPtr->mist[x+y*mapW].depth;
+    float mistHeight =  mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water[x+y*mapW].depth + mapPtr->lava[x+y*mapW].depth + mapPtr->mist[x+y*mapW].depth;
 
 	// Shoot a ray from the camera perspective down from the mist tile until it hit the ground, there sample the ground color
     float d; // How far the ray had to travel to reach the ground
@@ -758,13 +758,13 @@ argb_t getTileColorMist(Map* mapPtr, int x, int y, int ys, vec2f_t upVec)
 		{
 
 			// The ray can enter and leave masses of mist while traveling to the ground, we add mistDepth whenever the ray travel through mist
-			if( mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water.depth[x+y*mapW] + mapPtr->lava[x+y*mapW].depth + mapPtr->mist[X+Y*mapW].depth > rayHeight )
+			if( mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water[x+y*mapW].depth + mapPtr->lava[x+y*mapW].depth + mapPtr->mist[X+Y*mapW].depth > rayHeight )
 			{
 				mistDepth += stepSize;
 			}
 
 			// Detect ray collision with ground
-            if( mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water.depth[x+y*mapW] + mapPtr->lava[x+y*mapW].depth > rayHeight )
+            if( mapPtr->stone[x+y*mapW] + mapPtr->sand[x+y*mapW] + mapPtr->water[x+y*mapW].depth + mapPtr->lava[x+y*mapW].depth > rayHeight )
 			{
 
                 argb = lerpargb(mapPtr->argb[X+Y*mapW], mapPtr->argbBlured[X+Y*mapW], clampf(mistDepth/20.f, 0.1f, 1.f));
@@ -873,8 +873,8 @@ static void generateColorMap()
 				float slopX = (map.height[(x + 1) + (y) * map.w] - map.height[(x - 1) + (y) * map.w]); 
 				float slopY = (map.height[(x) + (y + 1) * map.w] - map.height[(x) + (y - 1) * map.w]);
 
-				argb = lerpargb(argb, pallete.water, minf(map.water.depth[x + mapPitch]*0.1f, 1.f));
-				argb = lerpargb(argb, pallete.waterDark, minf(map.water.depth[x + mapPitch]*0.05f, 1.f));
+				argb = lerpargb(argb, pallete.water, minf(map.water[x + mapPitch].depth*0.1f, 1.f));
+				argb = lerpargb(argb, pallete.waterDark, minf(map.water[x + mapPitch].depth*0.05f, 1.f));
 
 
 				if (map.susSed[x + y * map.w] > 0)
@@ -1073,10 +1073,10 @@ static void simulation(float dTime)
             //curl is something, velDiff is speed difference with nearby tiles
 			float curl = map.waterVel[(x+1)+y*map.w].y - map.waterVel[(x-1)+y*map.w].y - map.waterVel[x+(y+1)*map.w].x + map.waterVel[x+(y-1)*map.w].y;
             float velDiff = map.waterVel[x+y*w].x*2 - map.waterVel[(x-1)+(y)*w].x - map.waterVel[(x+1)+(y)*w].x + map.waterVel[x+y*w].y*2 - map.waterVel[x+(y-1)*w].y - map.waterVel[x+(y+1)*w].y;
-            float deltaV = (map.water.flow[(x-1)+(y)*MAPW].right + map.water.flow[(x)+(y+1)*MAPW].down + map.water.flow[(x+1)+(y)*MAPW].left + map.water.flow[(x)+(y-1)*MAPW].up - (map.water.flow[(x)+(y)*MAPW].right + map.water.flow[(x)+(y)*MAPW].down + map.water.flow[(x)+(y)*MAPW].left + map.water.flow[(x)+(y)*MAPW].up));
+            float deltaV = (map.water[(x-1)+(y)*MAPW].right + map.water[(x)+(y+1)*MAPW].down + map.water[(x+1)+(y)*MAPW].left + map.water[(x)+(y-1)*MAPW].up - (map.water[(x)+(y)*MAPW].right + map.water[(x)+(y)*MAPW].down + map.water[(x)+(y)*MAPW].left + map.water[(x)+(y)*MAPW].up));
 
             if(deltaV > 10.f){
-                map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + velDiff * 0.001f * dTime;
+                map.foamLevel[x+y*h] = map.foamLevel[x+y*h] + velDiff * 0.1f * dTime;
 				// foamSpawnerHead++;
 				// if(foamSpawnerHead > FOAMSPAWNER_MAX) foamSpawnerHead = 0;
 				// foamSpawner[foamSpawnerHead].pos.x = x;
@@ -1111,15 +1111,15 @@ static void simulation(float dTime)
 				map.lavaFoamLevel[x+y*w]  = minf(map.lavaFoamLevel[x+y*w], 1000.f);
 				map.lavaFoamLevel[x+y*w] -= minf(map.lavaFoamLevel[x+y*w], 0.01f * dTime);
 
-				if(map.water.depth[x+y*w] > 0.f){
-					lavaConverted = minf(minf(map.lava[x+y*w].depth, map.water.depth[x+y*w]), 2.f * dTime);
+				if(map.water[x+y*w].depth > 0.f){
+					lavaConverted = minf(minf(map.lava[x+y*w].depth, map.water[x+y*w].depth), 2.f * dTime);
 					map.lava[x+y*w].depth  -= lavaConverted; 
 					map.stone[x+y*w]       += lavaConverted;
-					map.water.depth[x+y*w] -= lavaConverted * 1.f; 
-					map.water.flow[x+y*w].down  -= lavaConverted * 1.f; 
-					map.water.flow[x+y*w].up    -= lavaConverted * 1.f; 
-					map.water.flow[x+y*w].left  -= lavaConverted * 1.f; 
-					map.water.flow[x+y*w].right -= lavaConverted * 1.f; 
+					map.water[x+y*w].depth -= lavaConverted * 1.f; 
+					map.water[x+y*w].down  -= lavaConverted * 1.f; 
+					map.water[x+y*w].up    -= lavaConverted * 1.f; 
+					map.water[x+y*w].left  -= lavaConverted * 1.f; 
+					map.water[x+y*w].right -= lavaConverted * 1.f; 
 					map.mist[x+y*w].depth  += lavaConverted * 4.f; 
 					// map.mist[x+y*w].down   += lavaConverted * 5.f; 
 					// map.mist[x+y*w].up     += lavaConverted * 5.f; 
@@ -1181,58 +1181,46 @@ static void simulation(float dTime)
     }
 
 
-	static uint32_t delay = 100;
-	delay += mouse.dWheel;
-	if(key.V){
-		static float var = 1;
-		for(uint32_t i=0;i<delay;i++){
-			var = powf(var, var);
-			// printf("%d %f\n",delay,var);
-		}
-	}
-
 	for(int i=0;i<1;i++){
 		// simFluidSWE(&(map.waterSWE), map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.90f, 0.01f /*minf(dTime*program.simSpeed, 0.13f)*/);
 
 	}
-	if(key.Y){
-		simFluidGPU(&(map.water), map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.98f, 0.02f /*minf(dTime*program.simSpeed, 0.13f)*/);
-	}else{
-    	simFluidBackup(&(map.water), map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.98f, 0.02f /*minf(dTime*program.simSpeed, 0.13f)*/);
-	}
+
+	PROFILE(simFluid(map.water, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.98f, minf(dTime*program.simSpeed, 0.13f));)
+
 
 	// memcpy(map.water.depth, map.waterSWE.depth, sizeof(float)*map.w*map.h);
 
 	//Handle border conditions of fluids
 	for (int y = 0; y < h; y++)
 	{
-		map.water.depth[3 + y * w] += map.water.depth[2 + y * w];
-		map.water.depth[2 + y * w] = 0.f;
-		map.water.flow[2 + y * w].right += map.water.flow[3 + y * w].left;
-		map.water.flow[3 + y * w].left = 0.f;
-		map.water.depth[(w - 3) + y * w] += map.water.depth[(w - 2) + y * w];
-		map.water.depth[(w - 2) + y * w] = 0.f;
-		map.water.flow[(w - 2) + y * w].left += map.water.flow[(w - 3) + y * w].right;
-		map.water.flow[(w - 3) + y * w].right = 0.f;
+		map.water[3 + y * w].depth += map.water[2 + y * w].depth;
+		map.water[2 + y * w].depth = 0.f;
+		map.water[2 + y * w].right += map.water[3 + y * w].left;
+		map.water[3 + y * w].left = 0.f;
+		map.water[(w - 3) + y * w].depth += map.water[(w - 2) + y * w].depth;
+		map.water[(w - 2) + y * w].depth = 0.f;
+		map.water[(w - 2) + y * w].left += map.water[(w - 3) + y * w].right;
+		map.water[(w - 3) + y * w].right = 0.f;
 		
 	}
 	for (int x = 0; x < w; x++)
 	{
-		map.water.depth[x + 3 * w] += map.water.depth[x + 2 * w];
-		map.water.depth[x + 2 * w] = 0.f;
-		map.water.flow[x + 2 * w].up += map.water.flow[x + 3 * w].down;
-		map.water.flow[x + 3 * w].down = 0;
-		map.water.depth[x + (h - 3) * w] += map.water.depth[x + (h - 2) * w];
-		map.water.depth[x + (h - 2) * w] = 0.f;
-		map.water.flow[x + (h - 2) * w].down += map.water.flow[x + (h - 3) * w].up;
-		map.water.flow[x + (h - 3) * w].up = 0.f;
+		map.water[x + 3 * w].depth += map.water[x + 2 * w].depth;
+		map.water[x + 2 * w].depth = 0.f;
+		map.water[x + 2 * w].up += map.water[x + 3 * w].down;
+		map.water[x + 3 * w].down = 0;
+		map.water[x + (h - 3) * w].depth += map.water[x + (h - 2) * w].depth;
+		map.water[x + (h - 2) * w].depth = 0.f;
+		map.water[x + (h - 2) * w].down += map.water[x + (h - 3) * w].up;
+		map.water[x + (h - 3) * w].up = 0.f;
 	}
 
 
     //Add water to height
     for(int y=0;y<h;y++){
         for(int x=0;x<w;x++){
-            map.height[x + y * w] += map.water.depth[x + y * w];
+            map.height[x + y * w] += map.water[x + y * w].depth;
         }
     }
 
@@ -1272,16 +1260,16 @@ static void simulation(float dTime)
 		map.mist[x + (h - 4) * w].up = 0.f;
 	}
 
-    for(int y=4;y<h-5;y++){
-        for(int x=4;x<w-5;x++){
+    for(int y=0;y<h;y++){
+        for(int x=0;x<w;x++){
             // calculate velocity
-            // map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left); // X
-            // map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up);       // Y
+            map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left); // X
+            map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up);       // Y
 
 			map.lavaVel[x + y * w].x = (map.lava[(x - 1) + (y)*w].right - map.lava[(x) + (y)*w].left + map.lava[(x) + (y)*w].right - map.lava[(x + 1) + (y)*w].left) / (32.f); // X
             map.lavaVel[x + y * w].y = (map.lava[(x) + (y - 1)*w].down - map.lava[(x) + (y)*w].up + map.lava[(x) + (y)*w].down - map.lava[(x) + (y + 1)*w].up) / (32.f);       // Y
 
-            map.present[x + y * w].water = (map.water.depth[x + y * w] > 0.01f) ? 1 : 0;
+            map.present[x + y * w].water = (map.water[x + y * w].depth > 0.01f) ? 1 : 0;
             map.present[x + y * w].mist  = (map.mist[x + y * w].depth > 0.01f) ? 1 : 0;
             map.present[x + y * w].lava  = (map.lava[x + y * w].depth > 0.01f) ? 1 : 0;
         }
@@ -1298,30 +1286,6 @@ static void simulation(float dTime)
     PROFILE(advect(map.lavaFoamLevel, map.lavaFoamLevelBuffer, map.lavaVel, w, h, minf(dTime*program.simSpeed, 0.13f));)
 
 
-#ifdef DEBUG
-    //Count the total amount of foam on map
-    totalFoamLevel = 0.f;
-    for(int i = 0; i < w*h; i++){
-        totalFoamLevel += map.foamLevel[i]; //Count total foamLevel for last loop (We don't count this loop because then we have to wait for the write to finish to do the read)
-    }
-
-    //Count total amount of sand
-    totalSandLevel = 0.f;
-    for(int i = 0; i < w*h; i++){
-        totalSandLevel += map.sand[i];
-        totalSandLevel += map.susSed[i];
-    }
-	//Count total amount of stone
-    totalStoneLevel = 0.f;
-    for(int i = 0; i < w*h; i++){
-        totalStoneLevel += map.stone[i];
-    }
-	//Count total amount of water
-	totalWaterLevel = 0.f;
-    for(int i = 0; i < w*h; i++){
-        totalWaterLevel += map.water.depth[i];
-    }
-#endif /*DEBUG*/
 
 }
 
@@ -1335,10 +1299,6 @@ static void init()
 
 	// map.waterSWE.depth = calloc(map.w * map.h, sizeof(float));
 	// map.waterSWE.flow = calloc(map.w * map.h, sizeof(vec2f_t));
-
-	map.water.depth = calloc(map.w * map.h, sizeof(float));
-	map.water.flow = calloc(map.w * map.h, sizeof(Fluid_flow));
-	map.water.vel = calloc(map.w * map.h, sizeof(vec2f_t));
 
 	renderMapBuffer.height = calloc(map.w * map.h, sizeof(float));
 	renderMapBuffer.mistDepth = calloc(map.w * map.h, sizeof(float));
@@ -1375,7 +1335,6 @@ static void init()
 	cursor.amount = 10;
 	cursor.radius = 15;
 	cursor.tool = TOOL_WATER;
-
 
 
 	//Call javascript that synchronise initialized settings with html gui

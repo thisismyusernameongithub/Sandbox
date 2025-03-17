@@ -37,7 +37,7 @@ void erodeAndDeposit(float* subject, float* suspendedSubject, float* terrain, fl
 void relax(float* subject, float* terrain, float talusAngle, float g, int w, int h, float dTime);
 void simFluid(fluid_t* restrict fluid, float* restrict terrain, const float g, float visc,  const float l, const int w, const int h, const float friction, const float dTime);
 void simFluidGPU(new_fluid_t* fluid, float* terrain, const float g, float visc,  const float l, const int w, const int h, const float friction, const float dTime);
-void simFluidBackup(new_fluid_t* restrict fluid, float* restrict terrain, const float g, float visc, const float l, const int w, const int h, const float friction, const float dTime);
+void simFluidBackup(fluid_t* restrict fluid, float* restrict terrain, const float g, float visc, const float l, const int w, const int h, const float friction, const float dTime);
 void simFluidSWE(fluidSWE_t* fluid, float* terrain, float g, float visc, float l, int w, int h, float friction, float dTime);
 
 #endif /* SIMULATION_H_ */ 

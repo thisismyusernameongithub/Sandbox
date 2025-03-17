@@ -365,9 +365,9 @@ void simFluid(fluid_t* restrict fluid, float* restrict terrain, const float g, f
 	}
 
 	// update depth
-	for (int y = 0; y < h - 0; y++)
+	for (int y = 1; y < h - 1; y++)
 	{
-		for (int x = 0; x < w - 0; x++)
+		for (int x = 1; x < w - 1; x++)
 		{
 			float deltaV = (f[(x - 1) + (y)*w].right + f[(x) + (y + 1) * w].up + f[(x + 1) + (y)*w].left + f[(x) + (y - 1) * w].down - (f[(x) + (y)*w].right + f[(x) + (y)*w].down + f[(x) + (y)*w].left + f[(x) + (y)*w].up)) * dTime;
 
@@ -523,11 +523,11 @@ void simFluidSWE(fluidSWE_t* fluid, float* terrain, float g, float visc, float l
 
 }
 
-void simFluidBackup(new_fluid_t* restrict fluid, float* restrict terrain, const float g, float visc, const float l, const int w, const int h, const float friction, const float dTime)
+void simFluidBackup(fluid_t* restrict fluid, float* restrict terrain, const float g, float visc, const float l, const int w, const int h, const float friction, const float dTime)
 {
 
 	const float A = l*l; //Cross sectional area of pipe
-	new_fluid_t* restrict f = fluid; // shorter name
+	fluid_t* restrict f = fluid; // shorter name
 	float* restrict t = terrain; // shorter name
 	const float v = visc;
 	float friction_dTime = 1.f - dTime * (1.f - friction);
@@ -539,16 +539,16 @@ void simFluidBackup(new_fluid_t* restrict fluid, float* restrict terrain, const 
 			for (int x = 1; x < w - 1; x++)
 			{
 				// if((f->depth[(x) + (y)*w]) > 0.01f){
-					f->flow[x + yw].right = maxf(f->flow[x + yw].right * friction_dTime + (f->depth[x + yw] + t[x + yw] - f->depth[(x + 1) + (yw)]    - t[(x + 1) + yw]      ) * dTime * A * g / l, 0.f);					   
-					f->flow[x + yw].down  = maxf(f->flow[x + yw].down  * friction_dTime + (f->depth[x + yw] + t[x + yw] - f->depth[(x) + (y + 1) * w] - t[(x) + (y + 1) * w] ) * dTime * A * g / l, 0.f); 
-					f->flow[x + yw].left  = maxf(f->flow[x + yw].left  * friction_dTime + (f->depth[x + yw] + t[x + yw] - f->depth[(x - 1) + (yw)]    - t[(x - 1) + yw]      ) * dTime * A * g / l, 0.f);						   
-					f->flow[x + yw].up    = maxf(f->flow[x + yw].up    * friction_dTime + (f->depth[x + yw] + t[x + yw] - f->depth[(x) + (y - 1) * w] - t[(x) + (y - 1) * w] ) * dTime * A * g / l, 0.f);	  
+					f[x + yw].right = maxf(f[x + yw].right * friction_dTime + (f[x + yw].depth + t[x + yw] - f[(x + 1) + (yw)].depth    - t[(x + 1) + yw]      ) * dTime * A * g / l, 0.f);					   
+					f[x + yw].down  = maxf(f[x + yw].down  * friction_dTime + (f[x + yw].depth + t[x + yw] - f[(x) + (y + 1) * w].depth - t[(x) + (y + 1) * w] ) * dTime * A * g / l, 0.f); 
+					f[x + yw].left  = maxf(f[x + yw].left  * friction_dTime + (f[x + yw].depth + t[x + yw] - f[(x - 1) + (yw)].depth    - t[(x - 1) + yw]      ) * dTime * A * g / l, 0.f);						   
+					f[x + yw].up    = maxf(f[x + yw].up    * friction_dTime + (f[x + yw].depth + t[x + yw] - f[(x) + (y - 1) * w].depth - t[(x) + (y - 1) * w] ) * dTime * A * g / l, 0.f);	  
 
 				// }else{
-				// 	f->flow[x + yw].right = 0;
-				// 	f->flow[x + yw].down = 0;
-				// 	f->flow[x + yw].left = 0;
-				// 	f->flow[x + yw].up = 0;
+				// 	f[x + yw].right = 0;
+				// 	f[x + yw].down = 0;
+				// 	f[x + yw].left = 0;
+				// 	f[x + yw].up = 0;
 				// }
 			}
 		}
@@ -559,23 +559,23 @@ void simFluidBackup(new_fluid_t* restrict fluid, float* restrict terrain, const 
 	// 		for (int x = 0; x < w - 0; x++)
 	// 		{
 	// 			if((f->depth[(x) + (y)*w]) > 0.01f){
-	// 				f->flow[x + yw].right = maxf(f->flow[x + yw].right  + (f->depth[x + yw] + t[x + yw] - f->depth[(x + 1) + (yw)]    - t[(x + 1) + yw]      ) * dTime * A * g / l, 0.f);					   
-	// 				f->flow[x + yw].down  = maxf(f->flow[x + yw].down   + (f->depth[x + yw] + t[x + yw] - f->depth[(x) + (y + 1) * w] - t[(x) + (y + 1) * w] ) * dTime * A * g / l, 0.f); 
-	// 				f->flow[x + yw].left  = maxf(f->flow[x + yw].left   + (f->depth[x + yw] + t[x + yw] - f->depth[(x - 1) + (yw)]    - t[(x - 1) + yw]      ) * dTime * A * g / l, 0.f);						   
-	// 				f->flow[x + yw].up    = maxf(f->flow[x + yw].up     + (f->depth[x + yw] + t[x + yw] - f->depth[(x) + (y - 1) * w] - t[(x) + (y - 1) * w] ) * dTime * A * g / l, 0.f);	  
+	// 				f[x + yw].right = maxf(f[x + yw].right  + (f->depth[x + yw] + t[x + yw] - f->depth[(x + 1) + (yw)]    - t[(x + 1) + yw]      ) * dTime * A * g / l, 0.f);					   
+	// 				f[x + yw].down  = maxf(f[x + yw].down   + (f->depth[x + yw] + t[x + yw] - f->depth[(x) + (y + 1) * w] - t[(x) + (y + 1) * w] ) * dTime * A * g / l, 0.f); 
+	// 				f[x + yw].left  = maxf(f[x + yw].left   + (f->depth[x + yw] + t[x + yw] - f->depth[(x - 1) + (yw)]    - t[(x - 1) + yw]      ) * dTime * A * g / l, 0.f);						   
+	// 				f[x + yw].up    = maxf(f[x + yw].up     + (f->depth[x + yw] + t[x + yw] - f->depth[(x) + (y - 1) * w] - t[(x) + (y - 1) * w] ) * dTime * A * g / l, 0.f);	  
 
 	// 				float d = f->depth[x + yw];
 	// 				float V = (d*d) / ((d*d) + 3.f * v * dTime);
-	// 				f->flow[x + yw].right *= V;
-	// 				f->flow[x + yw].down  *= V;
-	// 				f->flow[x + yw].left  *= V;
-	// 				f->flow[x + yw].up    *= V;
+	// 				f[x + yw].right *= V;
+	// 				f[x + yw].down  *= V;
+	// 				f[x + yw].left  *= V;
+	// 				f[x + yw].up    *= V;
 
 	// 			}else{
-	// 				f->flow[x + y * w].right = 0;
-	// 				f->flow[x + y * w].down = 0;
-	// 				f->flow[x + y * w].left = 0;
-	// 				f->flow[x + y * w].up = 0;
+	// 				f[x + y * w].right = 0;
+	// 				f[x + y * w].down = 0;
+	// 				f[x + y * w].left = 0;
+	// 				f[x + y * w].up = 0;
 	// 			}
 	// 		}
 	// 	}
@@ -584,13 +584,13 @@ void simFluidBackup(new_fluid_t* restrict fluid, float* restrict terrain, const 
 
 	for (int i = 0; i < w*h; i++){
 		// make sure flow out of cell isn't greater than inflow + existing fluid
-		if (f->depth[i] - (f->flow[i].right + f->flow[i].down + f->flow[i].left + f->flow[i].up) < 0)
+		if (f[i].depth - (f[i].right + f[i].down + f[i].left + f[i].up) < 0)
 		{
-			float K = minf((f->depth[i] * l * l) / ((f->flow[i].right + f->flow[i].down + f->flow[i].left + f->flow[i].up) * dTime), 1.0f);
-			f->flow[i].right *= K;
-			f->flow[i].down  *= K;
-			f->flow[i].left  *= K;
-			f->flow[i].up    *= K;
+			float K = minf((f[i].depth * l * l) / ((f[i].right + f[i].down + f[i].left + f[i].up) * dTime), 1.0f);
+			f[i].right *= K;
+			f[i].down  *= K;
+			f[i].left  *= K;
+			f[i].up    *= K;
 		}
 	}
 
@@ -599,9 +599,9 @@ void simFluidBackup(new_fluid_t* restrict fluid, float* restrict terrain, const 
 	{
 		for (int x = 1; x < w - 1; x++)
 		{
-			float deltaV = (f->flow[(x - 1) + (y)*w].right + f->flow[(x) + (y + 1) * w].up + f->flow[(x + 1) + (y)*w].left + f->flow[(x) + (y - 1) * w].down - (f->flow[(x) + (y)*w].right + f->flow[(x) + (y)*w].down + f->flow[(x) + (y)*w].left + f->flow[(x) + (y)*w].up)) * dTime;
+			float deltaV = (f[(x - 1) + (y)*w].right + f[(x) + (y + 1) * w].up + f[(x + 1) + (y)*w].left + f[(x) + (y - 1) * w].down - (f[(x) + (y)*w].right + f[(x) + (y)*w].down + f[(x) + (y)*w].left + f[(x) + (y)*w].up)) * dTime;
 
-			f->depth[(x) + (y)*w] = maxf(f->depth[(x) + (y)*w] + deltaV / (l * l), 0.f);
+			f[(x) + (y)*w].depth = maxf(f[(x) + (y)*w].depth + deltaV / (l * l), 0.f);
 
 
 		}
