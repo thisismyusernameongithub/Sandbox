@@ -136,9 +136,9 @@ static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int 
 
 void drawUI(Layer layer)
 {
-    clearLayer(layer);
+    // clearLayer(layer);
 
-    // drawText(layer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
+    drawText(layer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
 
     
 #ifdef DEBUG
@@ -223,16 +223,12 @@ for(int i = 0; i < FOAMSPAWNER_MAX; i++){
             {
                 if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
                 {
-                    layer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * layer.w] = rgb(255,0,0);
+                    // layer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * layer.w] = rgb(255,0,0);
                 }
             }
         }
     }
 
-    extern float totalWaterLevel;
-    drawText(layer, 100, 130, printfLocal("Total amount of water: %f", totalWaterLevel));
-    char* simStr = ((key.Y) ? "GPU" : "Processor");
-    drawText(layer, 100, 160, printfLocal("Sim running on: %s", simStr));
 
 }
 
@@ -375,9 +371,6 @@ void render(Layer layer, RenderMapBuffer* renderMapBuffer)
             layer.frameBuffer[x + pixelPitch] = frameBuffer[bufferPitch + (x)*window.drawSize.w];
         }
     }
-
-    //Draw a dot in the middle of the screen
-    layer.frameBuffer[window.drawSize.w / 2 + (window.drawSize.h / 2) * window.drawSize.w] = rgb(255, 0, 0);
 
 }
 

@@ -43,7 +43,7 @@
 #define DEG2RAD(x) ((x)*(M_PI/180.f))
 #define RAD2DEG(x) ((x)*(180.f/M_PI))
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -60,8 +60,6 @@ int NEWFEATURE = 1;
 float newFloat = 0.79f;
 
 
-#define MAPW 256
-#define MAPH 256
 
 #define windowSizeX 800	
 #define windowSizeY 800
@@ -121,47 +119,6 @@ camera_t g_cam = {
 };
 
 
-typedef struct{
-	int w;
-	int h;
-	float tileWidth; // width of one tile, used for adjusting fluid simulation
-	argb_t argbSed[MAPW * MAPH];
-	argb_t argbStone[MAPW * MAPH];
-	argb_t argb[MAPW * MAPH];
-	argb_t argbBlured[MAPW * MAPH];
-	argb_t argbBuffer[MAPW * MAPH];
-	float shadowSoft[MAPW * MAPH];
-	float shadow[MAPW * MAPH];
-	float height[MAPW * MAPH];
-	float stone[MAPW * MAPH];
-	float sand[MAPW * MAPH];
-	// fluidSWE_t waterSWE;
-	// new_fluid_t water;
-	fluid_t water[MAPW * MAPH];
-	vec2f_t waterVel[MAPW * MAPH]; // X/Y
-	fluid_t mist[MAPW * MAPH];
-	fluid_t lava[MAPW * MAPH];
-	vec2f_t lavaVel[MAPW * MAPH]; // X/Y
-    struct{
-        uint8_t water : 1;
-        uint8_t stone : 1;
-        uint8_t sand  : 1;
-        uint8_t mist  : 1;
-        uint8_t lava  : 1;
-    }present[MAPW * MAPH];
-	float susSed[MAPW * MAPH];
-	float susSed2[MAPW * MAPH];
-	float lavaFoamLevel[MAPW * MAPH];
-	float lavaFoamLevelBuffer[MAPW * MAPH];
-	float foamLevel[MAPW * MAPH];
-	float foamLevelBuffer[MAPW * MAPH];
-	struct
-	{
-		unsigned int updateShadowMap : 1;
-		unsigned int updateColorMap : 1;
-	} flags;
-} Map;
-
 
 Map map;
 
@@ -196,11 +153,11 @@ struct{
 	vec2f_t pos;
 	float amount;
 }foamSpawner[FOAMSPAWNER_MAX] = {
-	{},{.pos.x = 100, .pos.y = 100, .amount = 1000.f}
+	// {},{.pos.x = 100, .pos.y = 100, .amount = 1000.f}
 };
 
 //Function prototypes from terrainGeneration.c
-void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset, int mapW, int mapH, float* stoneMap, float* sandMap);
+void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset, int mapW, int mapH, Map* map);
 void erode(int w, int h, float* stone, float* sand);
 void oldErode(int w, int h, float* stone, float* sand);
 
@@ -277,7 +234,7 @@ void changeMapGenDetail(float detail)
 	terrainGen.detail = detail;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, &map);
 	}
 }
 EMSCRIPTEN_KEEPALIVE
@@ -286,13 +243,13 @@ void changeSandHeight(float sand)
 	terrainGen.sand = sand;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, &map);
 	}
 }
 EMSCRIPTEN_KEEPALIVE
 void generateMap()
 {
-	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
+	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, &map);
 }
 EMSCRIPTEN_KEEPALIVE
 void setAutoGenerate(int yesPleaseDoThat)
@@ -307,7 +264,7 @@ void setmapGenX(int x)
 	terrainGen.x = x;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, &map);
 	}
 }
 EMSCRIPTEN_KEEPALIVE
@@ -316,7 +273,7 @@ void setmapGenY(int y)
 	terrainGen.y = y;
 	if(terrainGen.autoGenerate)
 	{
-		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
+		generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, &map);
 	}
 }
 
@@ -514,16 +471,12 @@ static void updateInput(){
 
 
 
-	if (key.I == eKEY_PRESSED){
-		for(int i=0;i<100;i++){
+	if (key.I == eKEY_HELD){
+		for(int i=0;i<1;i++){
 			PROFILE(erode(map.w, map.h, map.stone, map.sand);)
 		}
 	}
-	if (key.O == eKEY_PRESSED){
-		for(int i=0;i<100;i++){
-			PROFILE(oldErode(map.w, map.h, map.stone, map.sand);)
-		}
-	}
+
 	if (key.L == eKEY_PRESSED){
 		NEWFEATURE = (NEWFEATURE) ? 0 : 1;
 		printf("NEWFATURE %s\n", NEWFEATURE ? "ON" : "OFF");
@@ -1306,30 +1259,17 @@ static void init()
 	renderMapBuffer.argbBlured = calloc(map.w * map.h, sizeof(argb_t));
 
 
-	// init camera position, the following will init camera to center overview a 256x256 map
-	// camera: x:336.321991 y:-93.287224 rot:1.570000 zoom:0.609125camera: x:327.101379 y:-84.052345 rot:1.570000 zoom:0.609125
-	
-	//The equation for starting camera position was found by sampling three correct starting positions at three different resolutions
-	// res	 x	        y	        z
-	// 256	 517,614   -273,724	    1,4669
-	// 512	 302,6	    -54,5	    0,726
-	// 1024	-129,934	395,956	    0,369
-	// 2048	-977,719	1287,959	0,184
-
-	// g_cam.x = 302.6;
-	g_cam.x = 0;//rendererSizeX * -0.8343 + 729.11;
-	// g_cam.y = -54.5;
-	g_cam.y = 0;//rendererSizeY * 0.8724 - 498.59;
-	g_cam.rot = 0.f;//3.14f / 2;
-	// g_cam.zoom = 0.726;
 	g_cam.zoom = 366.03 * pow(rendererSizeX, -0.996);
 
-	vec2f_t worldCenter = world2screen(map.w / 2, map.h / 2, g_cam);
-	vec2f_t screenCenter = {rendererSizeX / 2, rendererSizeY / 2};
-	vec2f_t centerDiff = {worldCenter.x - screenCenter.x, worldCenter.y - screenCenter.y};
-
-	cam_pan(&g_cam, centerDiff.x, centerDiff.y);
-	cam_rot(&g_cam, 0.f);
+	//Center camera to map
+	vec2f_t screenCenter = {rendererSizeX / 2, rendererSizeY / 2 + 50};
+	for(int i=0;i<10;i++){
+		vec2f_t worldCenter = world2screen(map.w / 2, map.h / 2, g_cam);
+		vec2f_t centerDiff = {worldCenter.x - screenCenter.x, worldCenter.y - screenCenter.y};
+		cam_pan(&g_cam, centerDiff.x, centerDiff.y);
+	}
+	//Rotate camera so shadows start from right to left
+	cam_rot(&g_cam, M_PI / 2.f);
 
 	//Init tool values
 	cursor.amount = 10;
@@ -1361,21 +1301,13 @@ static void init()
     }, cursor.amount, cursor.radius);
 
 
-	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, map.stone, map.sand);
+	generateTerrain(terrainGen.maxHeight, terrainGen.detail, terrainGen.sand, terrainGen.x, terrainGen.y, map.w, map.h, &map);
 
 
 	map.flags.updateShadowMap = 1; // make sure shadows are updated after map load
 	map.flags.updateColorMap = 1;  // make sure shadows are updated after map load
 
 
-	//make a tower of stone
-	for(int y=0;y<map.h;y++){
-		for(int x=0;x<map.w;x++){
-			if(x > 0 && x < 10 && y > 0 && y < 10){
-				map.stone[x + y * map.w] = 100.f;
-			}
-		}
-	}
 
 	// Generate initial stone rgb map
 	
@@ -1492,6 +1424,7 @@ static int mainLoop()
 
 	PROFILE(render(botLayer, &renderMapBuffer);)
 
+	drawUI(botLayer);
 
 	return window_run();
 }

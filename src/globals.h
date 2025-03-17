@@ -2,6 +2,7 @@
 #define GLOBALS_H
 
 #include "window.h"
+#include "simulation.h"
 
 typedef struct{
 	argb_t white;
@@ -24,5 +25,54 @@ typedef struct{
 }Pallete;
 
 extern Pallete pallete;
+
+
+#define MAPW 256
+#define MAPH 256
+
+typedef struct{
+	int w;
+	int h;
+	float tileWidth; // width of one tile, used for adjusting fluid simulation
+	argb_t argbSed[MAPW * MAPH];
+	argb_t argbStone[MAPW * MAPH];
+	argb_t argb[MAPW * MAPH];
+	argb_t argbBlured[MAPW * MAPH];
+	argb_t argbBuffer[MAPW * MAPH];
+	float shadowSoft[MAPW * MAPH];
+	float shadow[MAPW * MAPH];
+	float height[MAPW * MAPH];
+	float stone[MAPW * MAPH];
+	float sand[MAPW * MAPH];
+	// fluidSWE_t waterSWE;
+	// new_fluid_t water;
+	fluid_t water[MAPW * MAPH];
+	vec2f_t waterVel[MAPW * MAPH]; // X/Y
+	fluid_t mist[MAPW * MAPH];
+	fluid_t lava[MAPW * MAPH];
+	vec2f_t lavaVel[MAPW * MAPH]; // X/Y
+    struct{
+        uint8_t water : 1;
+        uint8_t stone : 1;
+        uint8_t sand  : 1;
+        uint8_t mist  : 1;
+        uint8_t lava  : 1;
+    }present[MAPW * MAPH];
+	float susSed[MAPW * MAPH];
+	float susSed2[MAPW * MAPH];
+	float lavaFoamLevel[MAPW * MAPH];
+	float lavaFoamLevelBuffer[MAPW * MAPH];
+	float foamLevel[MAPW * MAPH];
+	float foamLevelBuffer[MAPW * MAPH];
+	struct
+	{
+		unsigned int updateShadowMap : 1;
+		unsigned int updateColorMap : 1;
+	} flags;
+} Map;
+
+
+extern Map map;
+
 
 #endif // GLOBALS_H

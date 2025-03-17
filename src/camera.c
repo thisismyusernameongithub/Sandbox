@@ -69,7 +69,7 @@ vec2f_t screen2world(float x, float y, camera_t camera)
 void cam_rot(camera_t* camPtr, float angle)
 {
 	// Get the screen center point
-	vec2f_t screenCenter = {window.drawSize.w / 2.f, window.drawSize.h / 2.f};
+	vec2f_t screenCenter = {window.drawSize.w / 2.f, window.drawSize.h / 2.f + 50};
 
     // Calculate the center of the screen in world coordinates
     vec2f_t pos1 = screen2world(screenCenter.x, screenCenter.y, *camPtr);

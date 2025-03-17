@@ -11,6 +11,7 @@
 #include <stdlib.h> //rand()
 #include "stb_perlin.h"
 #include "window.h"
+#include "globals.h"
 
 #include "css_profile.h"
 
@@ -24,8 +25,8 @@
  * @param yOffset Y-axis offset for the Perlin noise
  * @param mapW Width of the terrain map in pixels
  * @param mapH Height of the terrain map in pixels
- * @param stoneMap Output array for the stone heightmap values
- * @param sandMap Output array for the sand layer heightmap values
+ * @param map->stone Output array for the stone heightmap values
+ * @param map->sand Output array for the sand layer heightmap values
  * 
  * @details
  * The function generates two heightmaps:
@@ -35,12 +36,22 @@
  * The detail parameter controls the number of octaves used in the Perlin noise,
  * with more octaves creating more complex terrain features.
  */
-void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset, int mapW, int mapH, float* stoneMap, float* sandMap)
+void generateTerrain(float maxHeight, float detail, float sand, float xOffset, float yOffset, int mapW, int mapH, Map* map)
 {
 	
 	int w = mapW;
 	int h = mapH;
 	
+	// Zero current map
+	for(int i = 0; i < w * h; i++)
+	{
+		fluid_t empty = {0};
+		map->stone[i] = 0.f;
+		map->sand[i] = 0.f;
+		map->water[i] = empty;
+		map->lava[i] = empty;
+		map->mist[i] = empty;
+	}
 
 	float min = 0.f;
 	float max = 0.f;
@@ -52,8 +63,8 @@ void generateTerrain(float maxHeight, float detail, float sand, float xOffset, f
 		{
 			for (int x = 0; x < w; x++)
 			{
-				stoneMap[x + y * w] = 10.f;
-				sandMap[x + y * w] = 0.f;
+				map->stone[x + y * w] = 10.f;
+				map->sand[x + y * w] = 0.f;
 
 				min = 0.f;
 				max = 100.f;
@@ -64,18 +75,18 @@ void generateTerrain(float maxHeight, float detail, float sand, float xOffset, f
 		{
 			for (int x = 0; x < w; x++)
 			{
-				stoneMap[x + y * w] = 0.f;
-				sandMap[x + y * w] = 0.f;
+				map->stone[x + y * w] = 0.f;
+				map->sand[x + y * w] = 0.f;
 				float oPow2 = 1.f;
 				for(int o = 1; o <= noOctaves; o++, oPow2 *= 2.f){ 
 					
-					stoneMap[x + y * w] += -fabsf(stb_perlin_noise3(oPow2*((float)x + xOffset)/(float)w, oPow2*((float)y + yOffset)/(float)h, 0, 0, 0, 0) / (oPow2));
+					map->stone[x + y * w] += -fabsf(stb_perlin_noise3(oPow2*((float)x + xOffset)/(float)w, oPow2*((float)y + yOffset)/(float)h, 0, 0, 0, 0) / (oPow2));
 					
 				}
 				
 
-				min = minf(stoneMap[x + y * w], min);
-				max = maxf(stoneMap[x + y * w], max);
+				min = minf(map->stone[x + y * w], min);
+				max = maxf(map->stone[x + y * w], max);
 			}
 			// printf("\rGenerating terrain %f", (float)y / (float)h);
 			// fflush(stdout);
@@ -90,20 +101,20 @@ void generateTerrain(float maxHeight, float detail, float sand, float xOffset, f
 		for (int x = 0; x < w; x++)
 		{
 			//Normalize terrain height and multiply by max Height
-			stoneMap[x + y * w] = (-min + (stoneMap[x + y * w])) / hDiff * maxHeight;
+			map->stone[x + y * w] = (-min + (map->stone[x + y * w])) / hDiff * maxHeight;
 
 			//Flatten the stone to a height of 10m below sand height, then add 10m of sand on top along with dunes.
-			if(stoneMap[x + y * w] < sandHeight){
-				if(stoneMap[x + y * w] < sandHeight - 10.f){
-					stoneMap[x + y * w] = lerp(stoneMap[x + y * w], (sandHeight - 10.f), (1.f - stoneMap[x + y * w]/maxHeight));
+			if(map->stone[x + y * w] < sandHeight){
+				if(map->stone[x + y * w] < sandHeight - 10.f){
+					map->stone[x + y * w] = lerp(map->stone[x + y * w], (sandHeight - 10.f), (1.f - map->stone[x + y * w]/maxHeight));
 				}
 				
-				// sandMap[x + y * w] = lerp(stoneMap[x + y * w], sandHeight, (1.f - stoneMap[x + y * w]/maxHeight)) - stoneMap[x + y * w];
+				// map->sand[x + y * w] = lerp(map->stone[x + y * w], sandHeight, (1.f - map->stone[x + y * w]/maxHeight)) - map->stone[x + y * w];
 			}
 
 
-			min2 = minf(stoneMap[x + y * w], min2);
-			max2 = maxf(stoneMap[x + y * w], max2);
+			min2 = minf(map->stone[x + y * w], min2);
+			max2 = maxf(map->stone[x + y * w], max2);
 		}
 	}
 
@@ -111,8 +122,8 @@ void generateTerrain(float maxHeight, float detail, float sand, float xOffset, f
 	{
 		for (int x = 2; x < w-2; x++)
 		{
-			if(stoneMap[x + y * w] < sandHeight){
-				sandMap[x + y * w] = (-min + stb_perlin_ridge_noise3(((float)x + xOffset)/(float)w, ((float)y + yOffset)/(float)h, 0.f, 2.5f, 2.8f, 1.f, 3, 0, 0, 0))  * 10.f * (1.f - stoneMap[x + y * w] / sandHeight);
+			if(map->stone[x + y * w] < sandHeight){
+				map->sand[x + y * w] = (-min + stb_perlin_ridge_noise3(((float)x + xOffset)/(float)w, ((float)y + yOffset)/(float)h, 0.f, 2.5f, 2.8f, 1.f, 3, 0, 0, 0))  * 10.f * (1.f - map->stone[x + y * w] / sandHeight);
 			}
 		}
 
@@ -123,12 +134,12 @@ void generateTerrain(float maxHeight, float detail, float sand, float xOffset, f
 	// 	for (int x = 0; x < w; x++)
 	// 	{
 	// 		vec2f_t prim = {
-	// 			.x = stoneMap[(x+1)+(y)*w] - stoneMap[(x-1)+(y)*w],
-	// 			.y = stoneMap[(x)+(y+1)*w] - stoneMap[(x)+(y-1)*w]
+	// 			.x = map->stone[(x+1)+(y)*w] - map->stone[(x-1)+(y)*w],
+	// 			.y = map->stone[(x)+(y+1)*w] - map->stone[(x)+(y-1)*w]
 	// 			};
 	// 		vec2f_t bis = {
-	// 			.x = (stoneMap[(x+1)+(y)*w] - stoneMap[(x)+(y)*w]) - (stoneMap[(x)+(y)*w] - stoneMap[(x-1)+(y)*w]),
-	// 			.y = (stoneMap[(x)+(y+1)*w] - stoneMap[(x)+(y)*w]) - (stoneMap[(x)+(y)*w] - stoneMap[(x)+(y-1)*w])
+	// 			.x = (map->stone[(x+1)+(y)*w] - map->stone[(x)+(y)*w]) - (map->stone[(x)+(y)*w] - map->stone[(x-1)+(y)*w]),
+	// 			.y = (map->stone[(x)+(y+1)*w] - map->stone[(x)+(y)*w]) - (map->stone[(x)+(y)*w] - map->stone[(x)+(y-1)*w])
 	// 		};
 
 
@@ -198,7 +209,7 @@ void erode(int w, int h, float* stone, float* sand)
 	float initialSpeed = 1.f;
 	float initialWaterVolume = 10.f;
 	float inertia = 0.5f;
-	int numberOfDroplets = 1000;
+	int numberOfDroplets = 100;
 
 
 	if(gaussianWeights[0] == 0.f)
