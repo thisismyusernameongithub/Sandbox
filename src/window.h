@@ -58,7 +58,7 @@ typedef struct{
 		int w;
 		int h;
 	}drawSize;
-	char title[100];
+	char title[200];
 	struct{
 		unsigned int fullScreen        : 1;
 		unsigned int fullScreenDesktop : 1;

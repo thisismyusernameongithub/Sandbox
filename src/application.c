@@ -43,7 +43,7 @@
 #define DEG2RAD(x) ((x)*(M_PI/180.f))
 #define RAD2DEG(x) ((x)*(180.f/M_PI))
 
-// #define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 	#ifndef CSS_PROFILE_H_
@@ -401,9 +401,7 @@ static void updateInput(){
 		cam_rot(&g_cam, angle * window.time.dTime);
 		// g_cam.rot = fmod((g_cam.rot + angle * 2.f * window.time.dTime), 6.283185307f);
 	}
-	if (key.ESC == eKEY_HELD){
-		window.closeWindow = true;
-	}
+
 
 	if (key.num1 == eKEY_PRESSED){
 		cursor.tool = TOOL_STONE;
@@ -482,7 +480,11 @@ static void updateInput(){
 		printf("NEWFATURE %s\n", NEWFEATURE ? "ON" : "OFF");
 	}
 
-
+#ifdef DEBUG
+	if (key.ESC == eKEY_HELD){
+		window.closeWindow = true;
+	}
+#endif
 
 }
 
@@ -1399,9 +1401,11 @@ static int mainLoop()
 {
 
 
-	char titleString[100];
+#ifdef DEBUG
+	char titleString[200];
 	sprintf(titleString, "fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime);
 	if(window.time.tick.ms100) window_setTitle(titleString);
+#endif /*DEBUG*/
 
 	
 
@@ -1438,8 +1442,11 @@ int main()
 	setbuf(stderr, NULL);
 	system("CHCP 65001"); //Enable unicode characters in the terminal
 
+	//Print title and set window title
+	char titleString[200];
+	sprintf(window.title, "%s %d.%d.%d - %s %s\n", APP_NAME, APP_VER_MAJOR, APP_VER_MINOR, APP_VER_BUILD, __DATE__, __TIME__);
+	printf("%s", window.title);
 
-	printf("%s %d.%d.%d - %s %s\n", APP_NAME, APP_VER_MAJOR, APP_VER_MINOR, APP_VER_BUILD, __DATE__, __TIME__);
 
 	window.drawSize.w = rendererSizeX;
 	window.drawSize.h = rendererSizeY;

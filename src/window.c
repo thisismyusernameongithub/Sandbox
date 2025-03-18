@@ -152,8 +152,8 @@ static void windowMoved()
 
 void window_setTitle(char *title)
 {
-	SDL_SetWindowTitle(SDLwindow, title);
 	strcpy(window.title, title);
+	SDL_SetWindowTitle(SDLwindow, window.title);
 	return;
 }
 

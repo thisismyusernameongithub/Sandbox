@@ -10,6 +10,10 @@ Play here: <https://benkt1.itch.io/sandbox>
 
 ## Todo
 
+- [x] Remove esc quitting the game
+- [ ] water velocity is super high along some edge
+- [x] Try to make exported zip file smaller to improve loading time
+- [x] Remove updating window name to fps when DEBUG is not defined.
 - [ ] Add white color to edges / fast moving water to look like foam.
 - [ ] Rendering doesn't work properly while autogenerating map adn scropping through coordinates, somethign to do with multithreading.
 - [ ] Add water to terrain generation.
@@ -29,6 +33,10 @@ Play here: <https://benkt1.itch.io/sandbox>
 - [ ] Split map into chunks, each chunk should keep track of what sort of fluids/sand it contains so it only need to update what is present.
 
 ## Done
+
+### v0.12
+
+- [x] Improved camera movement
 
 ### v0.10
 
