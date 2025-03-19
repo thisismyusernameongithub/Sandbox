@@ -42,7 +42,20 @@
         "utility": "c",
         "variant": "c",
         "__split_buffer": "c",
-        "string": "c"
+        "string": "c",
+        "__locale": "c",
+        "atomic": "c",
+        "bit": "c",
+        "cstddef": "c",
+        "locale": "c",
+        "condition_variable": "c",
+        "memory": "c",
+        "mutex": "c",
+        "__hash_table": "c",
+        "iterator": "c",
+        "string_view": "c",
+        "thread": "c",
+        "unordered_map": "c"
     },
     "cmake.configureOnOpen": true,
     "makefile.launchConfigurations": [

@@ -1428,7 +1428,7 @@ static int mainLoop()
 
 	PROFILE(render(botLayer, &renderMapBuffer);)
 
-	drawUI(botLayer);
+	drawUI(topLayer);
 
 	return window_run();
 }
@@ -1462,8 +1462,23 @@ int main()
 	// init bottom layer
 	botLayer = window_createLayer();
 	// init top layer
-	// topLayer = window_createLayer();
-	topLayer = botLayer;
+	topLayer = window_createLayer();
+	
+	Layer moreLayer = window_createLayer();
+	for(int y = 200; y < 300; y++){
+		for(int x = 200; x < 300; x++){
+			moreLayer.frameBuffer[x + y * moreLayer.w] = pallete.red;
+		}
+	}
+	Layer moreLayer2 = window_createLayer();
+	for(int y = 400; y < 500; y++){
+		for(int x = 200; x < 300; x++){
+			moreLayer2.frameBuffer[x + y * moreLayer2.w] = pallete.green;
+		}
+	}
+
+	
+	
 
 	PROFILE(init();)
 

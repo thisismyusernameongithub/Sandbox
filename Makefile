@@ -1,8 +1,8 @@
 # Application settings
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
-APP_VER_MINOR = 10
-APP_VER_BUILD = 2040
+APP_VER_MINOR = 12
+APP_VER_BUILD = 2104
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
 
@@ -28,12 +28,12 @@ else
 endif
 
 # Uncomment for Debugging
-# LFLAGS += -Wl,--warn-common -Wl,--demangle
-# CFLAGS += -g3 -D_FORTIFY_SOURCE=2 -fstack-clash-protection -fcf-protection=full -fno-omit-frame-pointer -fstack-protector-all
+LFLAGS += -Wl,--warn-common -Wl,--demangle
+CFLAGS += -g3 -D_FORTIFY_SOURCE=2 -fstack-clash-protection -fcf-protection=full -fno-omit-frame-pointer -fstack-protector-all
 
 # Uncomment for all optimizations
-CFLAGS += -flto -O3 -ffast-math -funroll-loops -fno-stack-protector -fno-exceptions -g3
-LFLAGS += -Wl,-O3,--strip-debug,--as-needed -flto -fuse-linker-plugin
+# CFLAGS += -flto -O3 -ffast-math -funroll-loops -fno-stack-protector -fno-exceptions -g3
+# LFLAGS += -Wl,-O3,--strip-debug,--as-needed -flto -fuse-linker-plugin
 
 EMSFLAGS = -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 \
             -sUSE_SDL_TTF=2 -sUSE_WEBGL2=1 -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sASSERTIONS -sGL_ASSERTIONS \

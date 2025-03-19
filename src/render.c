@@ -136,7 +136,7 @@ static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int 
 
 void drawUI(Layer layer)
 {
-    // clearLayer(layer);
+    clearLayer(layer);
 
     drawText(layer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
 

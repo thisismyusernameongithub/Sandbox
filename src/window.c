@@ -89,17 +89,19 @@ SDL_Window *SDLwindow;
 SDL_Renderer *SDLrenderer;
 SDL_GLContext GLcontext;
 
-GLuint windowShaderProgram; //Used to render framebuffer
-GLuint windowShaderTexture;
-GLuint VAO;
-GLint windowShaderUniformloc;
 
-#define MAX_TEXTURES (3) // Max number of allowed textures
+ // Max number of allowed textures TODO: Limit should be at least 16 on OpenGL ES 3.0 but for some reason it crashes on more than 7, find out why and fix if possible.
+#define MAX_TEXTURES (7)
 static struct
 {
 	int noTextures;
 	sdlTexture textures[MAX_TEXTURES];
 } textureStorage;
+
+GLuint windowShaderProgram; //Used to render framebuffer
+GLuint windowShaderTexture[MAX_TEXTURES];
+GLuint VAO;
+GLint windowShaderUniformloc[MAX_TEXTURES];
 
 
 static void windowResized(void);
@@ -111,23 +113,30 @@ void drawText(Layer layer, int xPos, int yPos, char *string);
 Layer window_createLayer(void)
 {
 	static int noLayers;
-	Layer layer;
-	sdlTexture texture = createSDLTexture(window.drawSize.w, window.drawSize.h);
-	layer.frameBuffer = (argb_t *)texture.frameBuffer;
-	layer.h = texture.h;
-	layer.w = texture.w;
-	layer.pitch = texture.pitch;
-	layer.depth = noLayers++;
-	// Clear framebuffer
-	for (int y = 0; y < layer.h; y++)
-	{
-		for (int x = 0; x < layer.w; x++)
-		{
-			layer.frameBuffer[x + y * layer.w] = (argb_t){.a = 150, .r = 255, .g = 0, .b = 255};
-		}
-	}
+	Layer layer = {0};
 
-	clearLayer(layer);
+	if(textureStorage.noTextures >= MAX_TEXTURES){
+		errLog("Max number of layers reached (%d)", MAX_TEXTURES);
+	} 
+	else
+	{
+		sdlTexture texture = createSDLTexture(window.drawSize.w, window.drawSize.h);
+		layer.frameBuffer = (argb_t *)texture.frameBuffer;
+		layer.h = texture.h;
+		layer.w = texture.w;
+		layer.pitch = texture.pitch;
+		layer.depth = noLayers++;
+		// Clear framebuffer
+		for (int y = 0; y < layer.h; y++)
+		{
+			for (int x = 0; x < layer.w; x++)
+			{
+				layer.frameBuffer[x + y * layer.w] = (argb_t){.a = 150, .r = 255, .g = 0, .b = 255};
+			}
+		}
+		
+		clearLayer(layer);
+	}
 
 	return layer;
 }
@@ -207,7 +216,7 @@ static void updateTime(void)
 	window.time.dTime = (double)(newTime - oldTime) / (double)freq;
 	oldTime = newTime;
 
-	window.time.fps = 1.0 / window.time.dTime;
+	window.time.fps = 1.0 / window.time.dTime ;
 }
 
 // Check if window settings has changes and handle whatever that change is
@@ -316,15 +325,25 @@ Window* window_init()
 
 	uint32_t flags = SDL_WINDOW_OPENGL;
 	if (window.settings.resizable)
+	{
 		flags |= SDL_WINDOW_RESIZABLE;
+	}
 	if (window.settings.borderLess)
+	{
 		flags |= SDL_WINDOW_BORDERLESS;
+	}
 	if (window.settings.fullScreen)
+	{
 		flags |= SDL_WINDOW_FULLSCREEN;
+	}
 	if (window.settings.maximized)
+	{
 		flags |= SDL_WINDOW_MAXIMIZED;
+	}
 	if (window.settings.minimized)
+	{
 		flags |= SDL_WINDOW_MINIMIZED;
+	}
 		
 
 	SDLwindow = SDL_CreateWindow(window.title, window.pos.x, window.pos.y, window.size.w, window.size.h, flags);
@@ -344,7 +363,7 @@ Window* window_init()
     //Make GL context current
 	SDL_GL_MakeCurrent(SDLwindow, GLcontext);
 
-	// Disable vsync
+	// Set vsync
 	SDL_GL_SetSwapInterval(window.settings.vSync ? 1 : 0);
 
     // INITIALIZE GLAD FOR GLES:
@@ -359,27 +378,28 @@ Window* window_init()
     printf("OpenGL Renderer: %s \n",  (char *)glGetString(GL_RENDERER));
 
 
+#ifdef UNUSED_SDL_RENDERER
 	uint32_t rendererFlags = SDL_RENDERER_ACCELERATED;
 	if (window.settings.vSync)
 		rendererFlags |= SDL_RENDERER_PRESENTVSYNC;
 
 
-	// SDLrenderer = SDL_CreateRenderer(SDLwindow, -1, rendererFlags); 
-	// if (SDLrenderer == NULL)
-	// {
-	// 	errLog(SDL_GetError());
-	// 	return NULL;
-	// }
+	SDLrenderer = SDL_CreateRenderer(SDLwindow, -1, rendererFlags); 
+	if (SDLrenderer == NULL)
+	{
+		errLog(SDL_GetError());
+		return NULL;
+	}
 
-	// // Set size of SDLrenderer
-	// SDL_RenderSetLogicalSize(SDLrenderer, window.size.w, window.size.h);
-	// // Set blend mode of SDLrenderer
-	// SDL_SetRenderDrawBlendMode(SDLrenderer, SDL_BLENDMODE_BLEND);
+	// Set size of SDLrenderer
+	SDL_RenderSetLogicalSize(SDLrenderer, window.size.w, window.size.h);
+	// Set blend mode of SDLrenderer
+	SDL_SetRenderDrawBlendMode(SDLrenderer, SDL_BLENDMODE_BLEND);
 
-	// // Set color of SDLrenderer to black
-	// SDL_SetRenderDrawColor(SDLrenderer, 100, 0, 0, 255);
-	// SDL_RenderClear(SDLrenderer);
-
+	// Set color of SDLrenderer to black
+	SDL_SetRenderDrawColor(SDLrenderer, 100, 0, 0, 255);
+	SDL_RenderClear(SDLrenderer);
+#endif
 
 
 	const char* vertexShaderSource =
@@ -412,25 +432,62 @@ Window* window_init()
 		return 0;
     }
 
-	const char* fragmentShaderSource =
-		"#version 300 es\n"
-		"precision mediump float;\n"
-		"\n"
-		"in vec2 texCoord;\n"
-		"uniform sampler2D inputDataTexture1;\n"
-		"\n"
-		"out vec4 FragColor;\n"
-		"\n"
-		"void main()\n"
-		"{\n"
-		"    vec2 invertedTexCoords = vec2(texCoord.x, 1.0 - texCoord.y);  // Invert Y coordinate\n"
-		"    FragColor = texture(inputDataTexture1, invertedTexCoords).bgra;  // Fetch the color using inverted coordinates\n"
-		"}\n";
+	// Generate fragment shader source based on number of textures
+	// Allocate buffer for shader source
+    // Calculate a reasonable size: header + uniform declarations + main function + sampling + blending
+    const int bufferSize = 1024 + MAX_TEXTURES * 128;
+    char* fragmentShaderSource = (char*)malloc(bufferSize);
+    
+    // Write shader header
+    int offset = sprintf(fragmentShaderSource,
+        "#version 300 es\n"
+        "precision mediump float;\n"
+        "\n"
+        "in vec2 texCoord;\n");
+    
+    // Generate uniform declarations for each texture
+    for (int i = 0; i < MAX_TEXTURES; i++) {
+        offset += sprintf(fragmentShaderSource + offset, "uniform sampler2D inputDataTexture%d;\n", i);
+    }
+    
+    // Begin main function and coordinate calculation
+    offset += sprintf(fragmentShaderSource + offset,
+        "\nout vec4 FragColor;\n"
+        "\n"
+        "void main()\n"
+        "{\n"
+        "    vec2 invertedTexCoords = vec2(texCoord.x, 1.0 - texCoord.y);  // Invert Y coordinate\n");
+    
+    // Sample all textures
+    for (int i = 0; i < MAX_TEXTURES; i++) {
+        offset += sprintf(fragmentShaderSource + offset, 
+            "    vec4 tex%d = texture(inputDataTexture%d, invertedTexCoords).bgra;\n", i, i);
+    }
+    
+    offset += sprintf(fragmentShaderSource + offset, "\n");
+    
+    // Start with first texture
+    offset += sprintf(fragmentShaderSource + offset, "    vec4 blended = tex0;\n\n");
+    
+    // Blend each subsequent texture
+    for (int i = 1; i < MAX_TEXTURES; i++) {
+        offset += sprintf(fragmentShaderSource + offset,
+            "    // Blend tex%d over the result\n"
+            "    blended = vec4(\n"
+            "        mix(blended.rgb, tex%d.rgb, tex%d.a),\n"
+            "        blended.a + tex%d.a * (1.0 - blended.a)\n"
+            "    );\n\n", i, i, i, i);
+    }
+    
+    // Finish shader
+    offset += sprintf(fragmentShaderSource + offset,
+        "    FragColor = blended;\n"
+        "}\n");
 
     //Load and compile fragment shader
     unsigned int fragmentShader;
     fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glShaderSource(fragmentShader, 1, (const char* const*)(&fragmentShaderSource), NULL); //I don't know what the fuck that type is, I just wanted the compiler warning to go away.
     glCompileShader(fragmentShader);
 
     GLint fragmentSuccess;
@@ -466,19 +523,28 @@ Window* window_init()
 	if(windowShaderProgram == 0){
 		errLog("Failed to compile shader");
 	}
-	glGenTextures(1, &windowShaderTexture);
-	glBindTexture(GL_TEXTURE_2D, windowShaderTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, window.drawSize.w, window.drawSize.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);  // No initial data
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	//Setup input texture 1
+	for(int i = 0; i < MAX_TEXTURES; i++){
+		glGenTextures(1, &windowShaderTexture[i]);
+		glBindTexture(GL_TEXTURE_2D, windowShaderTexture[i]);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, window.drawSize.w, window.drawSize.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);  // No initial data
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		
-	windowShaderUniformloc = glGetUniformLocation(windowShaderProgram, "inputDataTexture1");
-	if (windowShaderUniformloc == -1) {
-		errLog("Uniform '%s' not found in shader.", "inputDataTexture1");
-		return 0;
+		char uniformName[50];
+
+		sprintf(uniformName, "inputDataTexture%d", i);
+
+		windowShaderUniformloc[i] = glGetUniformLocation(windowShaderProgram, uniformName);
+		if (windowShaderUniformloc[i] == -1) {
+			errLog("Uniform '%s' not found in shader.", uniformName);
+			return 0;
+		}
 	}
+
 
 	//Define vertices and indices for a fullscreen quad
 	float vertices[] = {
@@ -533,27 +599,31 @@ Window* window_init()
 
 int window_run(void)
 {
-	// SDL_RenderClear(SDLrenderer);
-	// // Go through Layers in order they were created and draw on top of each other
-	// for (int i = 0; i < textureStorage.noTextures; i++)
-	// {
-	// 	if (textureStorage.textures[i].pixels != NULL)
-	// 	{ // Make sure we don't draw anything before lockTexture is run the first time
-	// 		// Copy framebuffer to screen texture
-	// 		memcpy(textureStorage.textures[i].pixels, textureStorage.textures[i].frameBuffer, textureStorage.textures[i].pitch * textureStorage.textures[i].h);
-	// 		// Send texture to GPU
-	// 		SDL_UnlockTexture(textureStorage.textures[i].texture);
-	// 		// Adjust texture to target rectangle (Scale and translate pixels)
-	// 		if (SDL_RenderCopy(SDLrenderer, textureStorage.textures[i].texture, NULL, NULL) < 0)
-	// 		{
-	// 			errLog(SDL_GetError());
-	// 		}
-	// 	}
-	// }
-	// // Present result on screen
-	// SDL_RenderPresent(SDLrenderer);
-	////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////
+
+#ifdef UNUSED_SDL_RENDERER
+
+	SDL_RenderClear(SDLrenderer);
+	// Go through Layers in order they were created and draw on top of each other
+	for (int i = 0; i < textureStorage.noTextures; i++)
+	{
+		if (textureStorage.textures[i].pixels != NULL)
+		{ // Make sure we don't draw anything before lockTexture is run the first time
+			// Copy framebuffer to screen texture
+			memcpy(textureStorage.textures[i].pixels, textureStorage.textures[i].frameBuffer, textureStorage.textures[i].pitch * textureStorage.textures[i].h);
+			// Send texture to GPU
+			SDL_UnlockTexture(textureStorage.textures[i].texture);
+			// Adjust texture to target rectangle (Scale and translate pixels)
+			if (SDL_RenderCopy(SDLrenderer, textureStorage.textures[i].texture, NULL, NULL) < 0)
+			{
+				errLog(SDL_GetError());
+			}
+		}
+	}
+	// Present result on screen
+	SDL_RenderPresent(SDLrenderer);
+
+#endif
+
 	updateTime();
 
 	updateInput();
@@ -571,17 +641,17 @@ int window_run(void)
 		SDL_Quit();
 		return false;
 	}
-	/////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////
-	// Lock texture and get a new pixel pointer
-	// for (int i = 0; i < textureStorage.noTextures; i++)
-	// {
-	// 	if (SDL_LockTexture(textureStorage.textures[i].texture, NULL, &textureStorage.textures[i].pixels, &textureStorage.textures[i].pitch) < 0)
-	// 	{
-	// 		errLog(SDL_GetError());
-	// 	}
-	// }
 
+#ifdef UNUSED_SDL_RENDERER
+	// Lock texture and get a new pixel pointer
+	for (int i = 0; i < textureStorage.noTextures; i++)
+	{
+		if (SDL_LockTexture(textureStorage.textures[i].texture, NULL, &textureStorage.textures[i].pixels, &textureStorage.textures[i].pitch) < 0)
+		{
+			errLog(SDL_GetError());
+		}
+	}
+#endif
 
 	//Select shader
 	glUseProgram(windowShaderProgram);
@@ -595,19 +665,20 @@ int window_run(void)
 	//Select the vertex array containing the fullscreen quad
 	glBindVertexArray(VAO); 
 	
-	//Bind input textures to shader
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, windowShaderTexture);
+	for(int i = 0; i < MAX_TEXTURES; i++){
 
-	//Update texture data
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, textureStorage.textures[0].w, textureStorage.textures[0].h, GL_RGBA, GL_UNSIGNED_BYTE, textureStorage.textures[0].frameBuffer);
+		//Bind input textures to shader
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, windowShaderTexture[i]);
 
-	
+		//Update texture data
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, textureStorage.textures[i].w, textureStorage.textures[i].h, GL_RGBA, GL_UNSIGNED_BYTE, textureStorage.textures[i].frameBuffer);
+		
+		glUniform1i(windowShaderUniformloc[i], i);
+	}
 
-	glUniform1i(windowShaderUniformloc, 0);
-	
 
-	//Render to the fullsreen quad
+	//Render to the fullscreen quad
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     SDL_GL_SwapWindow(SDLwindow);
@@ -716,14 +787,12 @@ static void updateInput(void)
 			case SDL_WINDOWEVENT_CLOSE:
 				// SDL_Log("Window %d closed", event.window.windowID);
 				break;
-#if SDL_VERSION_ATLEAST(2, 0, 5)
 			case SDL_WINDOWEVENT_TAKE_FOCUS:
 				// SDL_Log("Window %d is offered a focus", event.window.windowID);
 				break;
 			case SDL_WINDOWEVENT_HIT_TEST:
 				// SDL_Log("Window %d has a special hit test", event.window.windowID);
 				break;
-#endif
 			default:
 				// SDL_Log("Window %d got unknown event %d",
 				// 		event.window.windowID, event.window.event);

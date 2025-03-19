@@ -15,7 +15,6 @@ Play here: <https://benkt1.itch.io/sandbox>
 - [x] Try to make exported zip file smaller to improve loading time
 - [x] Remove updating window name to fps when DEBUG is not defined.
 - [ ] Add white color to edges / fast moving water to look like foam.
-- [ ] Rendering doesn't work properly while autogenerating map adn scropping through coordinates, somethign to do with multithreading.
 - [ ] Add water to terrain generation.
 - [ ] Add erosion brush.
 - [ ] Make windbrush follow the direction and speed of the mouse.
