@@ -10,6 +10,7 @@ Play here: <https://benkt1.itch.io/sandbox>
 
 ## Todo
 
+- [ ] Move background to seperate layer so we don't need to redraw it.
 - [x] Remove esc quitting the game
 - [ ] water velocity is super high along some edge
 - [x] Try to make exported zip file smaller to improve loading time

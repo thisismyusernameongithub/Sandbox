@@ -39,11 +39,12 @@ typedef struct{
 	argb_t argb[MAPW * MAPH];
 	argb_t argbBlured[MAPW * MAPH];
 	argb_t argbBuffer[MAPW * MAPH];
-	float shadowSoft[MAPW * MAPH];
+	float sunAngle; // 0-2PI, should represent the angle of the sun with PI / 2 being zenith
 	float shadow[MAPW * MAPH];
 	float height[MAPW * MAPH];
 	float stone[MAPW * MAPH];
 	float sand[MAPW * MAPH];
+	uint8_t wetMap[MAPW * MAPH];
 	// fluidSWE_t waterSWE;
 	// new_fluid_t water;
 	fluid_t water[MAPW * MAPH];

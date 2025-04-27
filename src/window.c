@@ -1555,6 +1555,7 @@ uint32_t compileShaderProgram(char* vertexShaderPath, char* fragmentShaderPath){
     free((char*)vertexShaderSource);
     free((char*)fragmentShaderSource);
 
+	printf("Shader compiled: %s, %s\n", vertexShaderPath, fragmentShaderPath);
 
     return  shaderProgram;
 }

@@ -9,7 +9,6 @@
 
 
 argb_t* frameBuffer;
-argb_t* background; // Stores background image that get copied to framebuffer at start of render
 
 
 extern camera_t g_cam;
@@ -19,6 +18,127 @@ static void initRenderStuff();
 static argb_t getTileColorMist(RenderMapBuffer* renderMapBuffer, int x, int y, int ys, vec2f_t upVec);
 static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int yTop, vec2f_t upVec, float xwt, float ywt, float dDxw, float dDyw, camera_t camera);
 void drawUI(Layer layer);
+
+
+void drawBackground(Layer layer)
+{
+    // Fill out background with colors
+    for (int y = 0; y < window.drawSize.h; y++)
+    {
+        // argb_t argb = (argb_t){.b = ((219 + x) >> 2), .g = (((182 + x) >> 2)), .r = (((92 + x) >> 2))};
+        argb_t argb = lerpargb(ARGB(255,25,47,56),ARGB(255,222,245,254),((float)y)/((float)window.drawSize.h)); //Gradient over rendersize
+        for (int x = 0; x < window.drawSize.w; x++)
+        {
+            layer.frameBuffer[window.drawSize.w - 1 - x + y * window.drawSize.w] = argb;
+        }
+    }
+}
+
+void drawUI(Layer layer)
+{
+    clearLayer(layer);
+
+    drawText(layer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
+
+    vec2f_t mouseWorldPos = screen2world(mouse.pos.x, mouse.pos.y, g_cam);
+    drawText(layer, 10, 30, printfLocal("Mouse: %d, %d | %f, %f ", mouse.pos.x, mouse.pos.y, mouseWorldPos.x, mouseWorldPos.y));
+    drawText(layer, 10, 50, printfLocal("Camera: %.3f, %.3f | rot: %.3f | zoom: %.3f", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom));
+    // Shadow on mouse pos
+    drawText(layer, 10, 70, printfLocal("Shadow: %f", map.shadow[(int)mouseWorldPos.x + (int)mouseWorldPos.y * map.w]));
+    // wetmap on mouse pos
+    drawText(layer, 10, 90, printfLocal("Wetmap: %d", map.wetMap[(int)mouseWorldPos.x + (int)mouseWorldPos.y * map.w]));
+    
+#ifdef DEBUG
+int cwx = clampf(cursor.worldX, 0, mapW);
+int cwy = clampf(cursor.worldY, 0, mapH);
+// drawText(layer, 10, 30,  printfLocal("Mouse: %d, %d | %d, %d | zoom: %f", mouse.pos.x, mouse.pos.y, cwx, cwy, g_cam.zoom) );
+// drawText(layer, 10, 50,  printfLocal("Shadow: %f", map.shadow[cwx+cwy*mapW]));
+// drawText(layer, 10, 70,  printfLocal("foam: %f total: %f", map.foamLevel[cwx+cwy*mapW], totalFoamLevel));
+// drawText(layer, 10, 90,  printfLocal("Stone: %f total: %f", map.stone[cwx+cwy*mapW], totalStoneLevel));
+// drawText(layer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*mapW], totalSandLevel));
+// drawText(layer, 10, 130, printfLocal("Water: %f total: %f", mapWater[cwx+cwy*mapW].depth, totalWaterLevel));
+// drawText(layer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*mapW].depth, totalMistLevel));
+// drawText(layer, 10, 170,  printfLocal("waterVel: %f, %f", mapWaterVel[cwx+cwy*mapW].x, mapWaterVel[cwx+cwy*mapW].y));
+
+//Draw water is present data
+// for (int y = 0; y < mapH; y++)
+// {
+// 	for (int x = 0; x < mapW; x++)
+// 	{
+//         if(map.present[x+y*mapW].water){
+//             vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+//             sPos.y = sPos.y - (mapHeight[x+y*mapW] + mapWater[x+y*mapW].depth)   / (sqrtf(2.f) * g_cam.zoom);
+//             drawPoint(layer, sPos.x, sPos.y, pallete.red);
+//         }
+//     }
+// }
+
+//Draw water velocity markers
+// for (int y = 0; y < mapH; y++)
+// {
+// 	if((y % 10)) continue;
+// 	for (int x = 0; x < mapW; x++)
+// 	{
+// 		if((x % 10)) continue;
+// 		float x2 = x + mapWaterVel[x + y * mapW].x;
+// 		float y2 = y + mapWaterVel[x + y * mapW].y;
+// 		vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+// 		vec2f_t sPos2 = world2screen((float)x2+0.5f,(float)y2+0.5f,g_cam);
+// 		sPos.y = sPos.y - (mapHeight[x+y*mapW] + mapWater[x+y*mapW].depth)   / (sqrtf(2.f) * g_cam.zoom);
+// 		sPos2.y = sPos2.y - (mapHeight[x+y*mapW] + mapWater[x+y*mapW].depth)   / (sqrtf(2.f) * g_cam.zoom);
+// 		float vel = sqrtf((mapWaterVel[x + y * mapW].x*mapWaterVel[x + y * mapW].x)+(mapWaterVel[x + y * mapW].y*mapWaterVel[x + y * mapW].y));
+// 		drawLine(layer, sPos.x,sPos.y, sPos2.x, sPos2.y, pallete.white);
+// 		drawPoint(layer, sPos.x, sPos.y, pallete.red);
+// 	}
+// }
+
+//Draw mouse position
+// for (int y = -1; y < 1; y++)
+// {
+// 	for (int x = -1; x < 1; x++)
+// 	{
+// 		if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
+// 		{
+// 			if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
+// 			{
+// 				layer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * layer.w].argb = 0xFFFFFFFF;
+// 			}
+// 		}
+// 	}
+// }
+
+//Draw foamspawner
+for(int i = 0; i < FOAMSPAWNER_MAX; i++){
+    if(foamSpawner[i].amount > 0.f){
+        int x = foamSpawner[i].pos.x;
+        int y = foamSpawner[i].pos.y;
+        vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
+        sPos.y = sPos.y - (mapHeight[x+y*mapW] + mapWater.depth[x+y*mapW])  / (sqrtf(2.f) * g_cam.zoom);
+        drawSquare(layer, sPos.x - 1, sPos.y - 1, 2, 2, pallete.red);
+    }
+}
+
+
+#endif
+
+    // Draw mouse position
+    for (int y = -1; y < 1; y++)
+    {
+        for (int x = -1; x < 1; x++)
+        {
+            if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
+            {
+                if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
+                {
+                    // layer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * layer.w] = rgb(255,0,0);
+                }
+            }
+        }
+    }
+
+
+}
+
 
 #define RENDERER_CPU
 
@@ -134,115 +254,19 @@ static void renderColumn(RenderMapBuffer* renderMapBuffer, int x, int yBot, int 
     }
 }
 
-void drawUI(Layer layer)
-{
-    clearLayer(layer);
-
-    drawText(layer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
-
-    
-#ifdef DEBUG
-int cwx = clampf(cursor.worldX, 0, mapW);
-int cwy = clampf(cursor.worldY, 0, mapH);
-// drawText(layer, 10, 30,  printfLocal("Mouse: %d, %d | %d, %d | zoom: %f", mouse.pos.x, mouse.pos.y, cwx, cwy, g_cam.zoom) );
-// drawText(layer, 10, 50,  printfLocal("Shadow: %f", map.shadow[cwx+cwy*mapW]));
-// drawText(layer, 10, 70,  printfLocal("foam: %f total: %f", map.foamLevel[cwx+cwy*mapW], totalFoamLevel));
-// drawText(layer, 10, 90,  printfLocal("Stone: %f total: %f", map.stone[cwx+cwy*mapW], totalStoneLevel));
-// drawText(layer, 10, 110,  printfLocal("Sand: %f total: %f", map.sand[cwx+cwy*mapW], totalSandLevel));
-// drawText(layer, 10, 130, printfLocal("Water: %f total: %f", mapWater[cwx+cwy*mapW].depth, totalWaterLevel));
-// drawText(layer, 10, 150, printfLocal("Mist: %f total: %f", map.mist[cwx+cwy*mapW].depth, totalMistLevel));
-// drawText(layer, 10, 170,  printfLocal("waterVel: %f, %f", mapWaterVel[cwx+cwy*mapW].x, mapWaterVel[cwx+cwy*mapW].y));
-
-//Draw water is present data
-// for (int y = 0; y < mapH; y++)
-// {
-// 	for (int x = 0; x < mapW; x++)
-// 	{
-//         if(map.present[x+y*mapW].water){
-//             vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-//             sPos.y = sPos.y - (mapHeight[x+y*mapW] + mapWater[x+y*mapW].depth)   / (sqrtf(2.f) * g_cam.zoom);
-//             drawPoint(layer, sPos.x, sPos.y, pallete.red);
-//         }
-//     }
-// }
-
-//Draw water velocity markers
-// for (int y = 0; y < mapH; y++)
-// {
-// 	if((y % 10)) continue;
-// 	for (int x = 0; x < mapW; x++)
-// 	{
-// 		if((x % 10)) continue;
-// 		float x2 = x + mapWaterVel[x + y * mapW].x;
-// 		float y2 = y + mapWaterVel[x + y * mapW].y;
-// 		vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-// 		vec2f_t sPos2 = world2screen((float)x2+0.5f,(float)y2+0.5f,g_cam);
-// 		sPos.y = sPos.y - (mapHeight[x+y*mapW] + mapWater[x+y*mapW].depth)   / (sqrtf(2.f) * g_cam.zoom);
-// 		sPos2.y = sPos2.y - (mapHeight[x+y*mapW] + mapWater[x+y*mapW].depth)   / (sqrtf(2.f) * g_cam.zoom);
-// 		float vel = sqrtf((mapWaterVel[x + y * mapW].x*mapWaterVel[x + y * mapW].x)+(mapWaterVel[x + y * mapW].y*mapWaterVel[x + y * mapW].y));
-// 		drawLine(layer, sPos.x,sPos.y, sPos2.x, sPos2.y, pallete.white);
-// 		drawPoint(layer, sPos.x, sPos.y, pallete.red);
-// 	}
-// }
-
-//Draw mouse position
-// for (int y = -1; y < 1; y++)
-// {
-// 	for (int x = -1; x < 1; x++)
-// 	{
-// 		if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
-// 		{
-// 			if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
-// 			{
-// 				layer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * layer.w].argb = 0xFFFFFFFF;
-// 			}
-// 		}
-// 	}
-// }
-
-//Draw foamspawner
-for(int i = 0; i < FOAMSPAWNER_MAX; i++){
-    if(foamSpawner[i].amount > 0.f){
-        int x = foamSpawner[i].pos.x;
-        int y = foamSpawner[i].pos.y;
-        vec2f_t sPos = world2screen((float)x+0.5f,(float)y+0.5f,g_cam);
-        sPos.y = sPos.y - (mapHeight[x+y*mapW] + mapWater.depth[x+y*mapW])  / (sqrtf(2.f) * g_cam.zoom);
-        drawSquare(layer, sPos.x - 1, sPos.y - 1, 2, 2, pallete.red);
-    }
-}
-
-
-#endif
-
-    // Draw mouse position
-    for (int y = -1; y < 1; y++)
-    {
-        for (int x = -1; x < 1; x++)
-        {
-            if (mouse.pos.x > 1 && mouse.pos.x < window.drawSize.w - 1)
-            {
-                if (mouse.pos.y > 1 && mouse.pos.x < window.drawSize.h - 1)
-                {
-                    // layer.frameBuffer[(mouse.pos.x + x) + (mouse.pos.y + y) * layer.w] = rgb(255,0,0);
-                }
-            }
-        }
-    }
-
-
-}
-
 void render(Layer layer, RenderMapBuffer* renderMapBuffer)
 {
 
-    //First time this function is called, create background framebuffer
+    //First time this function is called allocate the framebuffer
     static int firstTime = 1;
     if (firstTime) {
         initRenderStuff();
         firstTime = 0;
     }
 
-    clearLayer(layer);
+    // Because we are using a framebuffer we clear that instead of the layer, the framebuffer is copied to the layer later so it does not need clearing.
+    // clearLayer(layer);
+    memset(frameBuffer, 0 , window.drawSize.w * window.drawSize.h * sizeof(argb_t));
     
 
     int mapW = renderMapBuffer->mapW;
@@ -255,13 +279,13 @@ void render(Layer layer, RenderMapBuffer* renderMapBuffer)
     camera_t cam = g_cam;
 
     // Copy background to framebuffer
-    memcpy(frameBuffer, background, window.drawSize.w * window.drawSize.h * sizeof(argb_t));
+    // memcpy(frameBuffer, background, window.drawSize.w * window.drawSize.h * sizeof(argb_t));
 
 
     float xw, yw;
     float xs, ys;
 
-    // frustum
+    // frustum, get world coordinates of screen corners. These are used to calculate how the world coordinates change when we step a single pixel.
     xs = 0;
     ys = 0;
     vec2f_t ftl = screen2world(xs, ys, cam);
@@ -271,23 +295,21 @@ void render(Layer layer, RenderMapBuffer* renderMapBuffer)
     xs = 0;
     ys = window.drawSize.h;
     vec2f_t fbl = screen2world(xs, ys, cam);
-    xs = 0;
-    ys = window.drawSize.h + 100.f / cam.zoom;
 
     float dDxw = (ftl.x - fbl.x) / (float)window.drawSize.h; // delta x worldspace depth
     float dDyw = (ftl.y - fbl.y) / (float)window.drawSize.h; // delta y worldspace depth
 
-    // create normalized vector that point up on the screen but in world coorinates, for use with raytracing water refraction
+    // create normalized vector that point up on the screen but in world coordinates, for use with raytracing water refraction
     vec2f_t upVec = {ftl.x - fbl.x, ftl.y - fbl.y};
     float tempDistLongName = sqrtf(upVec.x * upVec.x + upVec.y * upVec.y);
     upVec.x /= tempDistLongName;
     upVec.y /= tempDistLongName;
 
-    ///////// merge these calculations later
+
     // calculate screen coordinates of world corners
-    vec2f_t tlw = world2screen(1, 1, cam);
-    vec2f_t trw = world2screen(mapW, 1, cam);
-    vec2f_t blw = world2screen(1, mapH, cam);
+    vec2f_t tlw = world2screen(0, 0, cam);
+    vec2f_t trw = world2screen(mapW, 0, cam);
+    vec2f_t blw = world2screen(0, mapH, cam);
     vec2f_t brw = world2screen(mapW, mapH, cam);
 
     // check what relative position map corners have
@@ -326,7 +348,7 @@ void render(Layer layer, RenderMapBuffer* renderMapBuffer)
     // calculate slope of tile edges on screen
     float tileEdgeSlopeRight = (float)(mapCornerRight.y - mapCornerBot.y) / (float)(mapCornerRight.x - mapCornerBot.x);
     float tileEdgeSlopeLeft = (float)(mapCornerBot.y - mapCornerLeft.y) / (float)(mapCornerBot.x - mapCornerLeft.x);
-    /////////
+
 
     // these coordinates will be the bounds at which renderColumn() will render any terrain
     int leftMostXCoord = maxf((int)mapCornerLeft.x, 0);
@@ -382,18 +404,6 @@ static void initRenderStuff()
 
     // Allocate memory needed
     frameBuffer = malloc(window.drawSize.w * window.drawSize.h * sizeof(argb_t));
-    background = malloc(window.drawSize.w * window.drawSize.h * sizeof(argb_t));
-
-    // Fill out background with colors
-    for (int x = 0; x < window.drawSize.w; x++)
-    {
-        // argb_t argb = (argb_t){.b = ((219 + x) >> 2), .g = (((182 + x) >> 2)), .r = (((92 + x) >> 2))};
-        argb_t argb = lerpargb(ARGB(255,25,47,56),ARGB(255,222,245,254),((float)x)/((float)window.drawSize.w)); //Gradient over rendersize
-        for (int y = 0; y < window.drawSize.h; y++)
-        {
-            background[window.drawSize.w - 1 - x + y * window.drawSize.w] = argb;
-        }
-    }
 
 }
 

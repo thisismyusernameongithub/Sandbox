@@ -92,7 +92,8 @@ struct{
 		TOOL_MIST = 5,
 		TOOL_FOAM = 6,
 		TOOL_WIND = 7,
-		TOOL_ERODE = 8
+		TOOL_ERODE = 8,
+		TOOL_WETMAP = 9
 	} tool;
 	float radius;
 	float amount;
@@ -171,6 +172,7 @@ float totalStoneLevel;
 float totalWaterLevel;
 float totalMistLevel;
 float totalLavaLevel;
+Layer backgroundLayer;
 Layer botLayer;
 Layer topLayer;
 
@@ -280,7 +282,6 @@ void setmapGenY(int y)
 
 
 
-
 static void updateInput(){
 	cursor.screenX = mouse.pos.x;
 	cursor.screenY = mouse.pos.y;
@@ -351,6 +352,13 @@ static void updateInput(){
                         map.present[cursor.worldX+cursor.worldY*map.w].lava = 1;
 					}
 					break;
+				case TOOL_WETMAP:
+					if (r > radius / 4){ continue; } 
+					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2)
+					{
+						map.wetMap[(cursor.worldX + k) + (cursor.worldY + j) * map.w] += add;;
+					}
+					break;
 				default:
 
 					break;
@@ -376,7 +384,7 @@ static void updateInput(){
 		// g_cam.y += cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
 
 		// Print camera pos
-		printf("camera: x:%f y:%f rot:%f zoom:%f\n", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
+		// printf("camera: x:%f y:%f rot:%f zoom:%f\n", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
 	}
 	if (key.S == eKEY_HELD){
 		cam_pan(&g_cam, 0.f, 450.f * window.time.dTime);
@@ -439,7 +447,7 @@ static void updateInput(){
 
 	
 	if (key.num9 == eKEY_PRESSED){
-		cursor.tool = TOOL_ERODE;
+		cursor.tool = TOOL_WETMAP;
 	}
 
 
@@ -465,19 +473,59 @@ static void updateInput(){
 				toolRadiusSlider.value = $0;
 			},cursor.radius);
 		}
+
+		
+
+		// printf("sunAngleTest: %f\n", sunAngleTest);
+	}
+
+	if (key.M == eKEY_HELD){
+		map.sunAngle += 0.25f * window.time.dTime;
+		map.sunAngle = fmodf(map.sunAngle, 2 * M_PI);
+		if (map.sunAngle < 0.f)
+		{
+			map.sunAngle += 2 * M_PI;
+		}
+	}
+
+	if (key.N == eKEY_HELD){
+		map.sunAngle -= 0.25f * window.time.dTime;
+		map.sunAngle = fmodf(map.sunAngle, 2 * M_PI);
+		if (map.sunAngle < 0.f)
+		{
+			map.sunAngle += 2 * M_PI;
+		}
 	}
 
 
 
 	if (key.I == eKEY_HELD){
 		for(int i=0;i<1;i++){
-			PROFILE(erode(map.w, map.h, map.stone, map.sand);)
+			erode(map.w, map.h, map.stone, map.sand);
 		}
 	}
 
 	if (key.L == eKEY_PRESSED){
 		NEWFEATURE = (NEWFEATURE) ? 0 : 1;
 		printf("NEWFATURE %s\n", NEWFEATURE ? "ON" : "OFF");
+	}
+
+	//Spawn a volcano
+	for(int y = 20; y < 25; y++)
+	{
+		for(int x = 100; x < 105; x++)
+		{
+			map.lava[(x) + (y) * map.w].depth += 1.0f;
+		}
+	}
+
+	//Spawn a fountain
+	for(int y = map.h - 25; y < map.h - 20; y++)
+	{
+		for(int x = 100; x < 105; x++)
+		{
+			map.water[(x) + (y) * map.w].depth += 0.5f;
+		}
 	}
 
 #ifdef DEBUG
@@ -490,105 +538,47 @@ static void updateInput(){
 
 
 float shadow[MAPW * MAPH];
+/**
+ * @brief 
+ */
 static void generateShadowMap()
 {
-    int R = 20;
-    int Rmin = 1;
-    int Rmax = 40;
-    float A = 1.f;
-    float Amin = -2.f;
-    float Amax = 2.f;
+
 
 	map.flags.updateShadowMap = 0;
 
 
-	float scale = 2;
 
 	// Copy heap stored variables to stack before calculation
 	int mapW = map.w;
 	int mapH = map.h;
 	for (int i = 0; i < mapW * mapH; i++)
-		shadow[i] = 0.90f;
-
-	//		Calculate shadows by iterating over map diagonally like example below.
-	//		------- Save the highest tileheight in diagonal and decrease by 1 each step.
-	//		|6|3|1| If current tile is higher, save that one as new highest point.
-	//		|8|5|2| If not then that tile is in shadow.
-	//		|9|7|4|
-	//		------- ONLY WORKS ON SQUARE MAPS!!!
-	//
-	int diagonalLines = (mapW + mapH) - 1;	// number of diagonal lines in map
-	int midPoint = (diagonalLines / 2) + 1; // number of the diagonal that crosses midpoint of map
-	int itemsInDiagonal = 0;				// stores number of tiles in a diagonal
-
-	for (int diagonal = 1; diagonal <= diagonalLines; diagonal++)
 	{
-		float terrainPeakHeight = 1;
-		int x, y;
-		if (diagonal <= midPoint)
-		{
-			itemsInDiagonal++;
-			for (int item = 0; item < itemsInDiagonal; item++)
-			{
-				y = (diagonal - item) - 1;
-				x = mapW - item - 1;
-				terrainPeakHeight -= 0.5f * A;
-				if (terrainPeakHeight > map.height[x + y * mapW])
-				{
-					if ((terrainPeakHeight - map.height[x + y * mapW]) > 2.f)
-					{
-						shadow[x + y * mapW] -= 0.10f;
-					}
-					else
-					{
-						//At the edge of the shadow, interpolate between shaded value and no shade
-						shadow[x + y * mapW] -= 0.05f * (terrainPeakHeight - map.height[x + y * mapW]);
-					}
-				}
-				else
-				{
-					terrainPeakHeight = map.height[x + y * mapW];
-				}
-				//Add shading based on angle
-				//TODO: Will sample outside shadow map 
-				shadow[x+y*map.w] += clampf(((map.height[(x-1)+(y-1)*map.w] - map.height[(x+1)+(y+1)*map.w]) / 20.f), -0.05f, 0.05f);
-			}
-		}
-		else
-		{
-			itemsInDiagonal--;
-			for (int item = 0; item < itemsInDiagonal; item++)
-			{
-				y = (mapH - 1) - item;
-				x = diagonalLines - diagonal - item;
-				terrainPeakHeight -= 0.5f * A;
-				if (terrainPeakHeight > map.height[x + y * mapW])
-				{
-					if ((terrainPeakHeight - map.height[x + y * mapW]) > 2.f)
-					{
-						shadow[x + y * mapW] -= 0.1f;
-					}
-					else
-					{
-						//At the edge of the shadow, interpolate between shaded value and no shade
-						shadow[x + y * mapW] -= 0.05f * (terrainPeakHeight - map.height[x + y * mapW]);
-					}
-				}
-				else
-				{
-					terrainPeakHeight = map.height[x + y * mapW];
-				}
-				//Add shading based on angle
-				//TODO: Will sample outside shadow map 
-				shadow[x+y*map.w] += clampf(((map.height[(x-1)+(y-1)*map.w] - map.height[(x+1)+(y+1)*map.w]) / 20.f), -0.05f, 0.05f);
-			}
-		}
+		shadow[i] = 1.0f;
+	}
+
+
+	// Calculate the angle of sunlight
+	float sunAngleX = cosf(map.sunAngle);
+	float sunAngleY;
+	if(map.sunAngle < M_PI / 2.f)
+	{
+		sunAngleY = tan(map.sunAngle);
+	}
+	else if(map.sunAngle < M_PI + M_PI / 2.f)
+	{
+		sunAngleY = 1.f / tan(map.sunAngle - M_PI / 2.f);
+	}
+	else
+	{
+		sunAngleY = tan(map.sunAngle);
 	}
 
 	// ambient occlusion
 	// Calculate ambient occlusion using a box filter, optimized with technique found here: http://blog.ivank.net/fastest-gaussian-blur.html#results
 
-	//	int R = 20;
+	// float intensity = 0.05f;
+	// int R = 10;
 	// float diameterDiv = 1.f / (R + 1 + R);
 	// for (int i = 0; i < mapH; i++)
 	// {
@@ -605,19 +595,19 @@ static void generateShadowMap()
 	// 	for (int j = 0; j <= R; j++)
 	// 	{
 	// 		val += map.height[ri++] - fv;
-	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv));
+	// 		shadow[ti] = ((map.height[ti]) - (val * diameterDiv)) * intensity;
 	// 		ti++;
 	// 	}
 	// 	for (int j = R + 1; j < mapW - R; j++)
 	// 	{
 	// 		val += map.height[ri++] - map.height[li++];
-	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv));
+	// 		shadow[ti] = ((map.height[ti]) - (val * diameterDiv)) * intensity;
 	// 		ti++;
 	// 	}
 	// 	for (int j = mapW - R; j < mapW; j++)
 	// 	{
 	// 		val += lv - map.height[li++];
-	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv));
+	// 		shadow[ti] = ((map.height[ti]) - (val * diameterDiv)) * intensity;
 	// 		ti++;
 	// 	}
 	// }
@@ -636,14 +626,14 @@ static void generateShadowMap()
 	// 	for (int j = 0; j <= R; j++)
 	// 	{
 	// 		val += map.height[ri] - fv;
-	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv));
+	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv)) * intensity;
 	// 		ri += mapW;
 	// 		ti += mapW;
 	// 	}
 	// 	for (int j = R + 1; j < mapH - R; j++)
 	// 	{
 	// 		val += map.height[ri] - map.height[li];
-	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv));
+	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv)) * intensity;
 	// 		li += mapW;
 	// 		ri += mapW;
 	// 		ti += mapW;
@@ -651,11 +641,90 @@ static void generateShadowMap()
 	// 	for (int j = mapH - R; j < mapH; j++)
 	// 	{
 	// 		val += lv - map.height[li];
-	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv));
+	// 		shadow[ti] += ((map.height[ti]) - (val * diameterDiv)) * intensity;
 	// 		li += mapW;
 	// 		ti += mapW;
 	// 	}
 	// }
+
+	//Clamp shadow value
+	float sunFactor = 0.8f + clampf(sunAngleY / (2.f * M_PI), -0.4f, 0.2f);
+	for (int i = 0; i < mapW * mapH; i++){
+		shadow[i] = 0.8f * sunFactor + clampf(shadow[i], -0.5f * sunFactor, 0.2f * sunFactor);
+	}
+	// printf("sunAngleX: %f sunAngleY: %f, sunFactor: %f\n", sunAngleX, sunAngleY, sunFactor);
+	// Normalize shadow values to 0.0f - 1.0f
+	float shadowMax = 0.f;
+	float shadowMin = 1.f;
+	for (int i = 0; i < mapW * mapH; i++)
+	{
+		if(shadow[i] > shadowMax)
+			shadowMax = shadow[i];
+		if(shadow[i] < shadowMin)
+			shadowMin = shadow[i];
+	}
+	// printf("shadowMax: %f shadowMin: %f\n", shadowMax, shadowMin);
+	for (int i = 0; i < mapW * mapH; i++){
+		// shadow[i] = (shadow[i] - shadowMin) / (shadowMax - shadowMin);
+	}
+
+
+#define SHADOWS
+#ifdef SHADOWS
+
+
+	//		Calculate shadows by iterating over map diagonally like example below.
+	//		------- Save the highest tileheight in diagonal and decrease by 1 each step.
+	//		|1|2|4| If current tile is higher, save that one as new highest point.
+	//		|3|5|7| If not then that tile is in shadow.
+	//		|6|8|9|
+	//		------- ONLY WORKS ON SQUARE MAPS!!!
+	//
+	int diagonalLines = (mapW + mapH) - 1;	// number of diagonal lines in map
+	int midPoint = (diagonalLines / 2) + 1; // number of the diagonal that crosses midpoint of map
+	int itemsInDiagonal = 0;				// stores number of tiles in a diagonal
+
+	for (int diagonal = 1; diagonal <= diagonalLines; diagonal++)
+	{
+		itemsInDiagonal = -abs(diagonal - mapW) + mapW; // How many items are in the current diagonal
+		float terrainPeakHeight = 1.f;
+
+		// check the angle of the sun, if it has crossed zenith we need to run the diagonal in reverse
+		int startItem = (sunAngleX >= 0) ? 0 : itemsInDiagonal - 1;
+		int endItem = (sunAngleX >= 0) ? itemsInDiagonal - 1 : 0;
+		int stepItem = (sunAngleX >= 0) ? 1 : -1;
+		// printf("diagonal: %d startItem: %d endItem: %d stepItem: %d\n", diagonal, startItem, endItem, stepItem);
+		for(int item = startItem; item != endItem; item += stepItem)
+		{
+			// X and Y start values needs to follow the upper edge and then go down the right edge of the map
+			int y = item + (diagonal > mapW ? diagonal - mapW : 0);
+			int x = ((diagonal > mapW) ? mapW - 1 : diagonal - 1) - item;
+
+			terrainPeakHeight -= sunAngleY;
+			if (terrainPeakHeight > map.height[x + y * mapW])
+			{
+				if ((terrainPeakHeight - map.height[x + y * mapW]) > 2.f)
+				{
+					shadow[x + y * mapW] -= 0.10f * sunFactor;
+				}
+				else
+				{
+					//At the edge of the shadow, interpolate between shaded value and no shade
+					shadow[x + y * mapW] -= 0.05f * (terrainPeakHeight - map.height[x + y * mapW]) * sunFactor;
+				}
+			}
+			else
+			{
+				terrainPeakHeight = map.height[x + y * mapW];
+			}
+			//Add shading based on angle
+			//TODO: Will sample outside shadow map 
+			shadow[x+y*map.w] +=  clampf( (map.height[(x-1)+(y+1)*map.w] - map.height[(x+1)+(y-1)*map.w]) * (sunAngleX / (2 * M_PI)) , -0.3f * sunFactor, 0.0f);
+		}
+	}
+
+
+#endif
 
 	// smooth shadows
 	//	boxBlur_4(shadow,map.shadow,mapW*mapH,mapW,mapH,1);
@@ -664,9 +733,11 @@ static void generateShadowMap()
 	// smoother shadows
 	//	boxBlur_4(shadow,map.shadowSoft,mapW*mapH,mapW,mapH,4);
 
-	for(int y=0;y<map.h/2;y++){
+
+
+	for(int y=0;y<map.h;y++){
 		for(int x=0;x<map.w;x++){
-			// shadow[x+y*map.w] += (map.height[(x)+(y)*map.w] - map.height[(x+1)+(y+1)*map.w] + map.height[(x-1)+(y-1)*map.w] - map.height[(x)+(y)*map.w]) / 2.f;
+			// shadow[x+y*map.w] += (map.height[(x-1)+(y-1)*map.w] - map.height[(x+1)+(y+1)*map.w]) / 20.f;
 		}
 	}
 
@@ -680,12 +751,14 @@ static void generateShadowMap()
 		// shadow[i] = 0.5f;
 	}
 
-	//Clamp shadow value
-	for (int i = 0; i < mapW * mapH; i++){
-		// shadow[i] = minf(maxf(shadow[i], 0.40f), 0.60f);
+
+
+
+	for(int y = 100; y < 120; y++){
+		for(int x = 100; x < 120; x++){
+			// shadow[x+y*map.w] = 1.0f;
+		}
 	}
-
-
 
 
 	memcpy(map.shadow, shadow, sizeof(shadow));
@@ -737,7 +810,7 @@ argb_t getTileColorMist(Map* mapPtr, int x, int y, int ys, vec2f_t upVec)
             // argb.r = background[window.drawSize.h - ys].r; //(102+(int)ys)>>2;//67
             // argb.g = background[window.drawSize.h - ys].g; //(192+(int)ys)>>2;//157
             // argb.b = background[window.drawSize.h - ys].b; //(229+(int)ys)>>2;//197
-			argb = background[window.drawSize.h - yScreen];
+			argb = backgroundLayer.frameBuffer[window.drawSize.h - yScreen];
 
             break;
 
@@ -779,7 +852,8 @@ static void generateColorMap()
 			
 			
 
-			if(map.present[x + mapPitch].lava){
+			if(map.present[x + mapPitch].lava)
+			{
 				float slopX = (map.height[(x + 1) + (y) * map.w] - map.height[(x - 1) + (y) * map.w]); //The thing at the end with makes it so if the x or y position is on the border then slopX and Y gets multiplied by 0 otherwise by 1
 				float slopY = (map.height[(x) + (y + 1) * map.w] - map.height[(x) + (y - 1) * map.w]);
 
@@ -822,9 +896,8 @@ static void generateColorMap()
 				argb = lerpargb(argb, map.argbStone[x + mapPitch], minf(1.f/map.lava[x+ mapPitch].depth, 1.f));
 
 			}
-
-			//Add water if present
-			if(map.present[x + mapPitch].water){
+			else if(map.present[x + mapPitch].water) // Add water if present
+			{
 				float slopX = (map.height[(x + 1) + (y) * map.w] - map.height[(x - 1) + (y) * map.w]); 
 				float slopY = (map.height[(x) + (y + 1) * map.w] - map.height[(x) + (y - 1) * map.w]);
 
@@ -856,6 +929,24 @@ static void generateColorMap()
 				//Foam at high velocity
 				// float vel = (map.waterVel[x + mapPitch].x*map.waterVel[x + mapPitch].x) + (map.waterVel[x + mapPitch].y*map.waterVel[x + mapPitch].y);
 				// argb = lerpargb(argb, pallete.foam, minf(vel * 0.001f, 1.f));
+			}
+			else if(map.wetMap[x + mapPitch] > 0)
+			{
+				float slopX = (map.height[(x + 1) + (y) * map.w] - map.height[(x - 1) + (y) * map.w]); 
+				float slopY = (map.height[(x) + (y + 1) * map.w] - map.height[(x) + (y - 1) * map.w]);
+
+				// Highlight according to slope
+				vec2f_t slopeVec = {.x = slopX + 0.000000001f, .y = slopY + 0.000000001f}; //The small addition is to prevent normalizing a zero length vector which we don't handle
+				vec2f_t slopeVecNorm = normalizeVec2f(slopeVec);
+				
+				float glare = ((slopeVecNorm.x - upVec.x)*(slopeVecNorm.x - upVec.x)+(slopeVecNorm.y - upVec.y)*(slopeVecNorm.y - upVec.y)) * ((x-3) && (y-3) && (x-map.w+3) && (y-map.h+3)); //The thing at the end with makes it so if the x or y position is on the border then slopX and Y gets multiplied by 0 otherwise by 1
+				// if(glare != glare) printf("heh\n");
+				glare = minf(glare*0.05f, 1.f);
+
+				argb = lerpargb(argb, pallete.white, glare);
+
+				// Darken a bit
+				argb = lerpargb(argb, pallete.black, 0.2f);
 			}
 
 			//Add foam
@@ -905,6 +996,9 @@ static void generateColorMap()
 						break;
 					case TOOL_WIND:
 						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.red, 0.1f + 0.02f * cursor.amount);
+						break;
+					case TOOL_WETMAP:
+						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.black, 0.1f + 0.02f * cursor.amount);
 						break;
 					default:
 						map.argb[x + y * map.w] = lerpargb(map.argb[x + y * map.w], pallete.black, 0.1f + 0.02f * cursor.amount);
@@ -959,6 +1053,7 @@ static void generateColorMap()
 		blurShader.uniform.data[1].val_i = 1; //Vertical pass
 		runShader(&blurShader);
 		blurShader.input.data[0].ptr_argb = tempPtr;
+
 
 	}
 	
@@ -1099,7 +1194,7 @@ static void simulation(float dTime)
     }
 
 
-    PROFILE(simFluid(map.lava, map.height, 9.81f, 20.f, map.tileWidth, w, h, 1.f, minf(dTime*program.simSpeed, 0.13f));)
+    simFluid(map.lava, map.height, 9.81f, 20.f, map.tileWidth, w, h, 1.f, minf(dTime*program.simSpeed, 0.13f));
 
 
 	//Handle border conditions of fluids
@@ -1141,7 +1236,7 @@ static void simulation(float dTime)
 
 	}
 
-	PROFILE(simFluid(map.water, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.98f, minf(dTime*program.simSpeed, 0.13f));)
+	simFluid(map.water, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.98f, minf(dTime*program.simSpeed, 0.13f));
 
 
 	// memcpy(map.water.depth, map.waterSWE.depth, sizeof(float)*map.w*map.h);
@@ -1180,7 +1275,7 @@ static void simulation(float dTime)
     }
 
 
-    PROFILE(simFluid(map.mist, map.height, 9.81f, 0.f, map.tileWidth, w, h, 0.90f, minf(dTime*program.simSpeed, 0.13f));)
+    simFluid(map.mist, map.height, 9.81f, 1.f, map.tileWidth, w, h, 0.20f, minf(dTime*program.simSpeed, 0.13f));
 
 	//Add mist to height
 	for(int y=0;y<h;y++){
@@ -1233,12 +1328,12 @@ static void simulation(float dTime)
 
     
     // PROFILE(erodeAndDeposit(map.sand, map.susSed, map.stone, map.water, map.waterVel, w, h);)
-    PROFILE(relax(map.sand, map.stone, 40.f, 9.81f, w, h, minf(dTime*program.simSpeed, 0.13f)); )
-    PROFILE(advect(map.susSed, map.susSed2, map.waterVel, w, h, minf(dTime*program.simSpeed, 0.13f));)
+    relax(map.sand, map.stone, 45.f, 9.81f, w, h, minf(dTime*program.simSpeed, 0.13f)); 
+    advect(map.susSed, map.susSed2, map.waterVel, w, h, minf(dTime*program.simSpeed, 0.13f));
 
     //Advect the foam
-    PROFILE(advect(map.foamLevel, map.foamLevelBuffer, map.waterVel, w, h, minf(dTime*program.simSpeed, 0.13f));)
-    PROFILE(advect(map.lavaFoamLevel, map.lavaFoamLevelBuffer, map.lavaVel, w, h, minf(dTime*program.simSpeed, 0.13f));)
+    advect(map.foamLevel, map.foamLevelBuffer, map.waterVel, w, h, minf(dTime*program.simSpeed, 0.13f));
+    advect(map.lavaFoamLevel, map.lavaFoamLevelBuffer, map.lavaVel, w, h, minf(dTime*program.simSpeed, 0.13f));
 
 
 
@@ -1260,9 +1355,10 @@ static void init()
 	renderMapBuffer.argb = calloc(map.w * map.h, sizeof(argb_t));
 	renderMapBuffer.argbBlured = calloc(map.w * map.h, sizeof(argb_t));
 
+	map.sunAngle = M_PI / 6.f;
 
-	g_cam.zoom = 366.03 * pow(rendererSizeX, -0.996);
-
+	g_cam.zoom = minf((float)map.w / (float)rendererSizeX, (float)map.h / (float)rendererSizeY);
+	
 	//Center camera to map
 	vec2f_t screenCenter = {rendererSizeX / 2, rendererSizeY / 2 + 50};
 	for(int i=0;i<10;i++){
@@ -1271,7 +1367,7 @@ static void init()
 		cam_pan(&g_cam, centerDiff.x, centerDiff.y);
 	}
 	//Rotate camera so shadows start from right to left
-	cam_rot(&g_cam, M_PI / 2.f);
+	cam_rot(&g_cam, 0.f);
 
 	//Init tool values
 	cursor.amount = 10;
@@ -1366,12 +1462,22 @@ static void init()
         }
     }
 
-	for(int y=0;y<map.h;y++){
-        for(int x=0;x<map.w;x++){
-            // map.water[x + y * map.w].depth = 10.f;
-        }
-    }
+	// for(int y=0;y<map.h;y++){
+    //     for(int x=0;x<map.w;x++){
+    //         map.sand[x + y * map.w] = 0.f;
+	// 		map.stone[x + y * map.w] = 0.f;
+	// 		map.water[x + y * map.w].depth = 0.f;
+    //     }
+    // }
 
+	// Generate a stone tower in the middle
+	for(int y = map.h/2 - 10; y < map.h/2 + 10; y++){
+		for(int x = map.w/2 - 10; x < map.w/2 + 10; x++){
+			// map.stone[x + y * map.w] = 100.f;
+		}
+	}
+
+	drawBackground(backgroundLayer);
 
 }
 
@@ -1459,23 +1565,12 @@ int main()
 
 	window_init();
 
+	backgroundLayer = window_createLayer();
 	// init bottom layer
 	botLayer = window_createLayer();
 	// init top layer
 	topLayer = window_createLayer();
 	
-	Layer moreLayer = window_createLayer();
-	for(int y = 200; y < 300; y++){
-		for(int x = 200; x < 300; x++){
-			moreLayer.frameBuffer[x + y * moreLayer.w] = pallete.red;
-		}
-	}
-	Layer moreLayer2 = window_createLayer();
-	for(int y = 400; y < 500; y++){
-		for(int x = 200; x < 300; x++){
-			moreLayer2.frameBuffer[x + y * moreLayer2.w] = pallete.green;
-		}
-	}
 
 	
 	

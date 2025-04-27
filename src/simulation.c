@@ -106,7 +106,8 @@ void advect(float* restrict densityMatrix, float* restrict bufferMatrix, vec2f_t
 }
 
 //Relax some sort of matter (Probably sand) over a terrain. 
-void relax(float* restrict subject, float* restrict terrain, float talusAngle, const float g, const int w, const int h, const float dTime){
+void relax(float* restrict subject, float* restrict terrain, float talusAngle, const float g, const int w, const int h, const float dTime)
+{
 
     float talusAngleRad = DEG2RAD(talusAngle);
     float maxSlope = tanf(talusAngleRad);

@@ -12,5 +12,6 @@ typedef struct{
 
 void render(Layer layer, RenderMapBuffer* renderMapBuffer);
 void drawUI(Layer layer);
+void drawBackground(Layer layer);
 
 #endif // RENDER_H
