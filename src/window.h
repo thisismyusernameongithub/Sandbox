@@ -102,6 +102,24 @@ typedef struct{
 	vec2i_t pos;
 	vec2i_t dPos;
 	int dWheel;
+	struct{
+		unsigned int hidden : 1;
+		enum{
+			eMOUSE_CURSOR_ARROW,     /**< Arrow */
+			eMOUSE_CURSOR_IBEAM,     /**< I-beam */
+			eMOUSE_CURSOR_WAIT,      /**< Wait */
+			eMOUSE_CURSOR_CROSSHAIR, /**< Crosshair */
+			eMOUSE_CURSOR_WAITARROW, /**< Small wait cursor (or Wait if not available) */
+			eMOUSE_CURSOR_SIZENWSE,  /**< Double arrow pointing northwest and southeast */
+			eMOUSE_CURSOR_SIZENESW,  /**< Double arrow pointing northeast and southwest */
+			eMOUSE_CURSOR_SIZEWE,    /**< Double arrow pointing west and east */
+			eMOUSE_CURSOR_SIZENS,    /**< Double arrow pointing north and south */
+			eMOUSE_CURSOR_SIZEALL,   /**< Four pointed arrow pointing north, south, east, and west */
+			eMOUSE_CURSOR_NO,        /**< Slashed circle or crossbones */
+			eMOUSE_CURSOR_HAND,      /**< Hand */
+			eMOUSE_CURSOR_NUMBER_OF_SYSTEM_CURSORS // Use this to allocate arrays to store cursors, it is correct as long as this enum is last ;)
+		} cursor;
+	}settings;
 }Mouse;
 
 typedef struct{
@@ -167,6 +185,7 @@ typedef struct{
 
 #define ARGB(A,R,G,B) (argb_t){.a=(A),.r=(R),.g=(G),.b=(B)}
 #define rgb(R,G,B) (argb_t){.a=(255),.r=(R),.g=(G),.b=(B)} //Not fond of this macro but if you're using VS Code and setting "Editor: Default Color Decorators = True", Then the color picker is enabled in editor when using this macro
+#define rgba(R,G,B,A) (argb_t){.a=(A*255),.r=(R),.g=(G),.b=(B)} //Not fond of this macro but if you're using VS Code and setting "Editor: Default Color Decorators = True", Then the color picker is enabled in editor when using this macro
 
 
 typedef struct{
@@ -358,5 +377,13 @@ typedef struct{
 uint32_t compileShaderProgram(char* vertexShaderPath, char* fragmentShaderPath);
 void runShader(Shader* shader);
 
-#endif /* WINDOW_H_ */
+typedef struct{
+	int size;
+	argb_t color;
+} dw_text_t;
 
+extern dw_text_t dw_text;
+
+
+
+#endif /* WINDOW_H_ */

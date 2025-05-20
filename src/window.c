@@ -64,7 +64,11 @@ char *printfLocal(const char *format, ...)
 }
 
 // External variables
-Mouse mouse;
+Mouse mouse = {
+	.settings = {
+		.cursor = eMOUSE_CURSOR_ARROW
+	}
+};
 Key key;
 
 __attribute__((unused)) static char *getMouseStateString(void)
@@ -211,12 +215,16 @@ static void updateTime(void)
 	if (!freq){
 		freq = SDL_GetPerformanceFrequency();
 	}
+
 	static uint64_t oldTime = 0;
 	uint64_t newTime = SDL_GetPerformanceCounter();
-	window.time.dTime = (double)(newTime - oldTime) / (double)freq;
+	if(window.time.ms100 > 10) // Give the dTime time to settle after startup
+	{
+		window.time.dTime = (double)(newTime - oldTime) / (double)freq;
+		window.time.fps = 1.0 / window.time.dTime;
+	}
 	oldTime = newTime;
-
-	window.time.fps = 1.0 / window.time.dTime ;
+		
 }
 
 // Check if window settings has changes and handle whatever that change is
@@ -437,7 +445,6 @@ Window* window_init()
     // Calculate a reasonable size: header + uniform declarations + main function + sampling + blending
     const int bufferSize = 1024 + MAX_TEXTURES * 128;
     char* fragmentShaderSource = (char*)malloc(bufferSize);
-	
     
     // Write shader header
     int offset = sprintf(fragmentShaderSource,
@@ -499,8 +506,6 @@ Window* window_init()
         errLog("Shader compilation failed\n%s\n", infoLog);
 		return 0;
     }
-
-	free(fragmentShaderSource);
 
 
     //Compile program
@@ -824,6 +829,28 @@ static void updateInput(void)
 
 	SDL_GetGlobalMouseState(&mouse.screenPos.x, &mouse.screenPos.y);
 
+	static bool cursorsInitialized = false;
+	static SDL_Cursor* SDLcursors[eMOUSE_CURSOR_NUMBER_OF_SYSTEM_CURSORS];
+	if(!cursorsInitialized)
+	{
+		// Create sdl cursors
+		for(int i = 0; i < eMOUSE_CURSOR_NUMBER_OF_SYSTEM_CURSORS; i++)
+		{
+			SDLcursors[i] = SDL_CreateSystemCursor(i);
+			if (SDLcursors[i] == NULL)
+			{
+				errLog(SDL_GetError());
+			}
+		}
+
+		cursorsInitialized = true;
+	}
+
+	// OPTIMIZE: SDL_SetCursor() is slow, only set cursor if it has changed
+	SDL_SetCursor(SDLcursors[mouse.settings.cursor]); // Set cursor to the one selected in settings
+
+	// TODO: Show / hide cursor based on setting mouse.settings.hidden
+
 	static int leftTrigger = 0;
 	if (SDL_mouseState & SDL_BUTTON(SDL_BUTTON_LEFT))
 	{
@@ -931,11 +958,23 @@ void clearLayer(Layer layer)
 	memset(layer.frameBuffer, 0, layer.h * layer.pitch);
 }
 
+
+// --------------------------------------------------------------
+// Text drawing stuff
+// --------------------------------------------------------------
+
+// Default settings
+dw_text_t dw_text = {
+	.size = 20,
+	.color = rgb(255, 255, 255)
+};
+
 static struct
 {
 	char fontPath[100];
 	TTF_Font *font[32]; // Contains pointers to fonts of different sizes
 	int size;
+	argb_t color;
 	enum
 	{
 		eTEXT_SOLID = 0,
@@ -944,8 +983,8 @@ static struct
 	} mode;
 } textSettings = {
 	.fontPath = "Resources/bpdots.squares-bold.ttf",
-	.size = 20,
 	.mode = eTEXT_SOLID};
+
 
 void drawText(Layer layer, int xPos, int yPos, char *string)
 {
@@ -968,6 +1007,13 @@ void drawText(Layer layer, int xPos, int yPos, char *string)
 		initialized = true;
 	}
 
+	// Update public settings
+	textSettings.size = dw_text.size;
+	textSettings.color = dw_text.color;
+
+
+	// Draw text
+
 	SDL_Surface *textSurface = NULL;
 
 	switch (textSettings.mode)
@@ -979,7 +1025,7 @@ void drawText(Layer layer, int xPos, int yPos, char *string)
 
 		break;
 	case eTEXT_SHADED:
-		textSurface = TTF_RenderUTF8_Shaded(textSettings.font[textSettings.size], string, (SDL_Color){.r = 255, .g = 255, .b = 255, .a = 255}, (SDL_Color){.r = 0, .g = 0, .b = 0, .a = 0});
+		textSurface = TTF_RenderUTF8_Shaded(textSettings.font[textSettings.size], string, (SDL_Color){.r = 255, .g = 255, .b = 255, .a = 255}, (SDL_Color){.r = 0, .g = 255, .b = 0, .a = 255});
 		if (textSurface == NULL)
 			errLog(SDL_GetError());
 
@@ -1001,14 +1047,20 @@ void drawText(Layer layer, int xPos, int yPos, char *string)
 		return;
 	}
 
-	for (int i = 0; i < textSurface->h; i++)
+	// Calculate limits so we don't draw outside the framebuffer
+	int min_i = maxi(0, -yPos);
+	int max_i = mini(textSurface->h, window.drawSize.h - yPos);
+	int min_b = maxi(0, -xPos);
+	int max_b = mini(textSurface->w, window.drawSize.w - xPos);
+
+	for (int i = min_i; i < max_i; i++)
 	{
-		for (int b = 0; b < textSurface->w; b++)
+		for (int b = min_b; b < max_b; b++)
 		{
 			if (((uint8_t *)textSurface->pixels)[b + i * textSurface->pitch])
 			{
 				if (textSettings.mode == eTEXT_SOLID)
-					layer.frameBuffer[(xPos + b) + (yPos + i) * window.drawSize.w].argb = 0xFFFFFFFF;
+					layer.frameBuffer[(xPos + b) + (yPos + i) * window.drawSize.w].argb = textSettings.color.argb;
 				if (textSettings.mode == eTEXT_SHADED)
 					layer.frameBuffer[(xPos + b) + (yPos + i) * window.drawSize.w].argb = (0xFF << 24) | (((uint8_t *)textSurface->pixels)[b + i * textSurface->pitch] << 16) | (((uint8_t *)textSurface->pixels)[b + i * textSurface->pitch] << 8) | (((uint8_t *)textSurface->pixels)[b + i * textSurface->pitch]);
 			}
@@ -1111,45 +1163,67 @@ void drawSquare(Layer layer, int x, int y, int w, int h, argb_t color){
 }
 
 void drawLine(Layer layer, int xStart, int yStart, int xEnd, int yEnd, argb_t color){
-	int outOfBounds = 0; //If both point are outside bounds we return from this funciton before drawing anything
-	if(xStart >= layer.w || xStart < 0 || yStart >= layer.h || yStart < 0){
-		// errLog(printfLocal("(%d,%d) Out of bounds", xStart, yStart));
-		xStart = clampi(xStart, 0, layer.w-1);
-		yStart = clampi(yStart, 0, layer.h-1);
-		outOfBounds++;
-	}
-	if(xEnd >= layer.w || xEnd < 0 || yEnd >= layer.h || yEnd < 0){
-		// errLog(printfLocal("(%d,%d) Out of bounds", xStart, yStart));
-		xEnd = clampi(xEnd, 0, layer.w-1);
-		yEnd = clampi(yEnd, 0, layer.h-1);
-		outOfBounds++;
-	}
-	if(outOfBounds >= 2) return;
+    // Clamp coordinates to be within layer bounds initially.
+    // This simplifies the Bresenham loop but might not be the most visually
+    // accurate clipping method for lines partially outside the bounds.
+    // A more sophisticated clipping algorithm (like Cohen-Sutherland)
+    // could be used for perfect clipping if needed.
+    int x0 = xStart;
+    int y0 = yStart;
+    int x1 = xEnd;
+    int y1 = yEnd; 
 
 
-
-	int dx = xEnd - xStart;
-	int dy = yEnd - yStart;
-
-	 // calculate steps required for generating pixels
-	int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
-
-	// calculate increment in x & y for each steps
-	float Xinc = dx / (float) steps;
-	float Yinc = dy / (float) steps;
-
-	// Put pixel for each step
-	float X = xStart;
-	float Y = yStart;
-	for (int i = 0; i <= steps; i++)
+	// If both endpoints are out of bounds on the same side, we can skip drawing.
+	int outOfBounds = ((x0 < 0) & (x1 < 0)) | ((x0 >= layer.w) & (x1 >= layer.w)) | ((y0 < 0) & (y1 < 0)) | ((y0 >= layer.h) & (y1 >= layer.h));
+	if (outOfBounds)
 	{
-		int x = round(X);
-		int y = round(Y);
-		layer.frameBuffer[(x)+(y)*layer.w] = color;
-		X += Xinc;           // increment in x at each step
-		Y += Yinc;           // increment in y at each step
-
+		return;
 	}
+
+    // If both original points were out of bounds on *opposite* sides
+    // after clamping they might become the same point or a very short line.
+    // The Bresenham implementation handles this gracefully.
+    // A simple check if the clamped points are identical might be slightly faster.
+    // if (x0 == x1 && y0 == y1) {
+    //     drawPoint(layer, x0, y0, color); // Draw single point if start/end are same after clamp
+    //     return;
+    // }
+
+
+    int dx = abs(x1 - x0);
+    int sx = x0 < x1 ? 1 : -1;
+    int dy = -abs(y1 - y0);
+    int sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;  /* error value e_xy */
+
+    while (1) {
+        // Plot the current point - bounds check *shouldn't* be necessary
+        // due to initial clamping, but added for safety.
+		// OPTIMIZE: If we use the line equation to calculate where the endpoints cross the borders of the screen we can draw from there
+		// instead and skip the bounds check below
+        if (x0 >= 0 && x0 < layer.w && y0 >= 0 && y0 < layer.h) {
+            layer.frameBuffer[x0 + y0 * layer.w] = color;
+        } else {
+            // This case should ideally not be hit due to clamping.
+            // If it is, it might indicate an issue elsewhere or a need
+            // for a more robust clipping algorithm before calling drawLine.
+        }
+
+
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if (e2 >= dy) { /* e_xy+e_x > 0 */
+            if (x0 == x1) break; // Avoid infinite loop for vertical lines
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) { /* e_xy+e_y < 0 */
+            if (y0 == y1) break; // Avoid infinite loop for horizontal lines
+            err += dx;
+            y0 += sy;
+        }
+    }
 }
 
 
@@ -1473,22 +1547,23 @@ char* readShaderSource(const char* filePath) {
     int fileLength = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    // Allocate memory for the shader source code (+1 for null terminator)
-    char* buffer = (char*)calloc(fileLength + 1, sizeof(char));
+	// Allocate memory for the shader source code
+    char* buffer = (char*)calloc(fileLength, sizeof(char));
     if (!buffer) {
         errLog("Failed to allocate memory for shader source\n");
-        fclose(file);
-        return NULL;
+		return NULL;
     }
 
     //Read file to buffer
-    size_t bytesRead = fread(buffer, 1, fileLength, file);
-    if (bytesRead < (size_t)fileLength) {
-        errLog("Warning: could only read %zu bytes of %d\n", bytesRead, fileLength);
-    }
-    
+    char chr;
+    int len = 0;
+    do{
+        chr = fgetc(file);
+        buffer[len++] = chr;
+    }while(chr != EOF);
+
     //Add null termination to buffer for use as c string
-    buffer[bytesRead] = '\0';
+    buffer[len-1] = '\0';
 
     fclose(file);
     return buffer;

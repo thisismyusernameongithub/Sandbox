@@ -1635,6 +1635,8 @@ static int mainLoop()
 
 	drawUI(uiLayer);
 
+	drawProfile(uiLayer,10,10);
+
 	return window_run();
 }
 
