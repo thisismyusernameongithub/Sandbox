@@ -66,6 +66,21 @@ vec2f_t screen2world(float x, float y, camera_t camera)
 	return retVal;
 }
 
+vec2f_t world2screen3D(float x, float y, float z, camera_t camera)
+{
+	// Get 2d screen position
+	vec2f_t screenPos;
+	screenPos = world2screen(x, y, camera);
+
+	// Offset z position
+	screenPos.x = screenPos.x;
+	screenPos.y = screenPos.y - (z / (sqrtf(2.f) * camera.zoom));
+
+	return screenPos;
+}
+
+
+
 void cam_rot(camera_t* camPtr, float angle)
 {
 	// Get the screen center point

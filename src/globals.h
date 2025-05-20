@@ -76,4 +76,22 @@ typedef struct{
 extern Map map;
 
 
+#define DROPLET_MAX 8192*2*2*2*2*2*2*2
+typedef struct {
+	vec3f_t pos;
+	vec3f_t vel;
+} Droplet;
+
+typedef struct 
+{
+	int head;
+	int max;
+	uint8_t active[DROPLET_MAX];
+	Droplet array[DROPLET_MAX];
+} Droplets;
+
+extern Droplets droplets;
+
+
+
 #endif // GLOBALS_H

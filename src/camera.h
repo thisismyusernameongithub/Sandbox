@@ -24,8 +24,13 @@ typedef struct{
 	} direction;
 } camera_t;
 
+
+
 // Convert world coordinates to screen coordinates
 vec2f_t world2screen(float x, float y, camera_t camera);
+
+// Convert 3D world coordinates to screen coordinates
+vec2f_t world2screen3D(float x, float y, float z, camera_t camera);
 
 // Convert screen coordinates to world coordinates
 vec2f_t screen2world(float x, float y, camera_t camera);

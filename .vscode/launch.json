@@ -16,14 +16,14 @@
             "name": "gcc build and debug active file",
             "type": "cppdbg",
             "request": "launch",
-            "program": "C:/Users/dwtys/OneDrive/Dokument/programming/sandbox/Sandbox/build/Sandbox.exe",
+            "program": "${workspaceFolder}/build/Sandbox.exe",
             "args": [],
-            "stopAtEntry": false,
+            "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false, //set to true to see output in cmd instead
             "MIMode": "gdb",
-            "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+            "miDebuggerPath": "/usr/bin/gdb", //"C:/msys64/mingw64/bin/gdb.exe",
             "setupCommands": [
                 {
                 "description": "Enable pretty-printing for gdb",

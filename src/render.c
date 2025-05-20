@@ -41,6 +41,8 @@ void drawUI(Layer layer)
     drawText(layer, 10, 10, printfLocal("fps: %.2f, ms: %.2f", window.time.fps, 1000.f*window.time.dTime));
 
     vec2f_t mouseWorldPos = screen2world(mouse.pos.x, mouse.pos.y, g_cam);
+    mouseWorldPos.x = clampf(mouseWorldPos.x, 0, map.w - 1);
+    mouseWorldPos.y = clampf(mouseWorldPos.y, 0, map.h - 1);
     drawText(layer, 10, 30, printfLocal("Mouse: %d, %d | %f, %f ", mouse.pos.x, mouse.pos.y, mouseWorldPos.x, mouseWorldPos.y));
     drawText(layer, 10, 50, printfLocal("Camera: %.3f, %.3f | rot: %.3f | zoom: %.3f", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom));
     // Shadow on mouse pos

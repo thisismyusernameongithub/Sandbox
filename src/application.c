@@ -68,6 +68,7 @@ float newFloat = 0.79f;
 
 
 void drawUI(Layer layer);
+static void init();
 
 
 struct{
@@ -174,7 +175,8 @@ float totalMistLevel;
 float totalLavaLevel;
 Layer backgroundLayer;
 Layer botLayer;
-Layer topLayer;
+Layer midLayer;
+Layer uiLayer;
 
 
 extern argb_t* background; //Declared in render.c, needed here for transparent mist agains edge of map
@@ -298,65 +300,68 @@ static void updateInput(){
 		float s = 2.f * sigma * sigma; //Standard deviation I think
 
 		float radius = cursor.radius;
-		for (int j = -radius; j <= radius; j++){
-			for (int k = -radius; k <= radius; k++){
-				float r = sqrtf(k * k + j * j);
+		for (int y = cursor.worldY - radius; y <= cursor.worldY + radius; y++){
+			for (int x = cursor.worldX - radius; x <= cursor.worldX + radius; x++){
+				float r = sqrtf((x - cursor.worldX) * (x - cursor.worldX) + (y - cursor.worldY) * (y - cursor.worldY));
 				if (r > radius){ continue; } //Skip if outside of cursor cirlce radius
+
+
 
 				switch (cursor.tool){
 				case TOOL_WATER:
 					if (r > radius / 4){ continue; } //Fluids need smaller circle or we get a huge area of this fluid
-					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth = maxf(map.water[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
-                        map.present[cursor.worldX+cursor.worldY*map.w].water = 1;
+					if (x > 2 && y > 2 && x < map.w - 2 && y < map.h - 2)
+					{
+						map.water[(x) + (y) * map.w].depth = maxf(map.water[(x) + (y) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+                        map.present[(x) + (y) * map.w].water = 1;
 					}
 					break;
 				case TOOL_SAND:
-					if (cursor.worldX + k > 1 && cursor.worldY + j > 1 && cursor.worldX + k < map.w - 1 && cursor.worldY + j < map.h - 1){
-						map.sand[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.sand[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+					if (x > 1 && y > 1 && x < map.w - 1 && y < map.h - 1){
+						map.sand[(x) + (y) * map.w] = maxf(map.sand[(x) + (y) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
 					}
 					break;
 				case TOOL_STONE:
-					if (cursor.worldX + k > 0 && cursor.worldY + j > 0 && cursor.worldX + k < map.w - 0 && cursor.worldY + j < map.h - 0){
-						map.stone[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.stone[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+					if (x > 0 && y > 0 && x < map.w - 0 && y < map.h - 0){
+						map.stone[(x) + (y) * map.w] = maxf(map.stone[(x) + (y) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
 					}
 					break;
 				case TOOL_FOAM:
-					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						if(map.present[(cursor.worldX + k) + (cursor.worldY + j) * map.w].lava){
-							map.lavaFoamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.lavaFoamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+					if (x > 2 && y > 2 && x < map.w - 2 && y < map.h - 2){
+						if(map.present[(x) + (y) * map.w].lava){
+							map.lavaFoamLevel[(x) + (y) * map.w] = maxf(map.lavaFoamLevel[(x) + (y) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
 						}else{
-							map.foamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] = maxf(map.foamLevel[(cursor.worldX + k) + (cursor.worldY + j) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+							map.foamLevel[(x) + (y) * map.w] = maxf(map.foamLevel[(x) + (y) * map.w] + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
 						}
 					}
 					break;
                 case TOOL_WIND:
-					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						// map.water.up[(cursor.worldX + k) + (cursor.worldY + j) * map.w] += 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
-						// map.water.down[(cursor.worldX + k) + (cursor.worldY + j) * map.w] -= 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
-						map.mist[(cursor.worldX + k) + (cursor.worldY + j) * map.w].up += 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
-						map.mist[(cursor.worldX + k) + (cursor.worldY + j) * map.w].down -= 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
+					if (x > 2 && y > 2 && x < map.w - 2 && y < map.h - 2){
+						// map.water.up[(x) + (y) * map.w] += 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
+						// map.water.down[(x) + (y) * map.w] -= 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
+						map.mist[(x) + (y) * map.w].up += 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
+						map.mist[(x) + (y) * map.w].down -= 10.f * add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime;
 					}
 					break;
                 case TOOL_MIST:
 					if (r > radius / 4){ continue; } //Fluids need smaller circle or we get a huge area of this fluid
-					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						map.mist[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth = maxf(map.mist[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
-                        map.present[cursor.worldX+cursor.worldY*map.w].mist = 1;
+					if (x > 2 && y > 2 && x < map.w - 2 && y < map.h - 2){
+						map.mist[(x) + (y) * map.w].depth = maxf(map.mist[(x) + (y) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+                        map.present[(x) + (y) * map.w].mist = 1;
 					}
 					break;
 				case TOOL_LAVA:
 					if (r > radius / 4){ continue; } //Fluids need smaller circle or we get a huge area of this fluid
-					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2){
-						map.lava[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth = maxf(map.lava[(cursor.worldX + k) + (cursor.worldY + j) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
-                        map.present[cursor.worldX+cursor.worldY*map.w].lava = 1;
+					if (x > 2 && y > 2 && x < map.w - 2 && y < map.h - 2){
+						map.lava[(x) + (y) * map.w].depth = maxf(map.lava[(x) + (y) * map.w].depth + add * cursor.radius * cursor.radius * cursor.amount * expf(-(r * r) / (s)) / (M_PI * s) * window.time.dTime, 0.f);
+                        map.present[(x) + (y) * map.w].lava = 1;
 					}
 					break;
 				case TOOL_WETMAP:
 					if (r > radius / 4){ continue; } 
-					if (cursor.worldX + k > 2 && cursor.worldY + j > 2 && cursor.worldX + k < map.w - 2 && cursor.worldY + j < map.h - 2)
+					if (x > 2 && y > 2 && x < map.w - 2 && y < map.h - 2)
 					{
-						map.wetMap[(cursor.worldX + k) + (cursor.worldY + j) * map.w] += add;;
+						map.wetMap[(x) + (y) * map.w] += add;;
 					}
 					break;
 				default:
@@ -370,26 +375,15 @@ static void updateInput(){
 
 	if (key.A == eKEY_HELD){
 		cam_pan(&g_cam, -300.f * window.time.dTime, 0.f);
-		// g_cam.x += cosf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
-		// g_cam.y += sinf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
 	}
 	if (key.D == eKEY_HELD){
 		cam_pan(&g_cam, 300.f * window.time.dTime, 0.f);
-		// g_cam.x -= cosf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
-		// g_cam.y -= sinf(g_cam.rot - (M_PI / 4.f)) * 300.f * window.time.dTime;
 	}
 	if (key.W == eKEY_HELD){
 		cam_pan(&g_cam, 0.f, -450.f * window.time.dTime);
-		// g_cam.x -= sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
-		// g_cam.y += cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
-
-		// Print camera pos
-		// printf("camera: x:%f y:%f rot:%f zoom:%f\n", g_cam.x, g_cam.y, g_cam.rot, g_cam.zoom);
 	}
 	if (key.S == eKEY_HELD){
 		cam_pan(&g_cam, 0.f, 450.f * window.time.dTime);
-		// g_cam.x += sinf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
-		// g_cam.y -= cosf(g_cam.rot - (M_PI / 4.f)) * 450.f * window.time.dTime;
 	}
 	if (key.R == eKEY_HELD){
 		cam_zoom(&g_cam, 1.f  * window.time.dTime);
@@ -400,14 +394,10 @@ static void updateInput(){
 	if (key.Q == eKEY_HELD){
 		float angle = 64.f * M_PI / 180.f;
 		cam_rot(&g_cam, -angle * window.time.dTime);
-		// g_cam.rot = fmod((g_cam.rot - angle * 2.f * window.time.dTime), 6.283185307f);
-		// if (g_cam.rot < 0.f)
-		// 	g_cam.rot = 6.283185307f;
 	}
 	if (key.E == eKEY_HELD){
 		float angle = 64.f * M_PI / 180.f;
 		cam_rot(&g_cam, angle * window.time.dTime);
-		// g_cam.rot = fmod((g_cam.rot + angle * 2.f * window.time.dTime), 6.283185307f);
 	}
 
 
@@ -480,7 +470,7 @@ static void updateInput(){
 	}
 
 	if (key.M == eKEY_HELD){
-		map.sunAngle += 0.25f * window.time.dTime;
+		map.sunAngle += 0.45f * window.time.dTime;
 		map.sunAngle = fmodf(map.sunAngle, 2 * M_PI);
 		if (map.sunAngle < 0.f)
 		{
@@ -489,7 +479,7 @@ static void updateInput(){
 	}
 
 	if (key.N == eKEY_HELD){
-		map.sunAngle -= 0.25f * window.time.dTime;
+		map.sunAngle -= 0.45f * window.time.dTime;
 		map.sunAngle = fmodf(map.sunAngle, 2 * M_PI);
 		if (map.sunAngle < 0.f)
 		{
@@ -498,6 +488,11 @@ static void updateInput(){
 	}
 
 
+	if (key.B == eKEY_PRESSED)
+	{
+		// Temporary map reset, will allocate more memory so it's not a good solution
+		init();
+	}
 
 	if (key.I == eKEY_HELD){
 		for(int i=0;i<1;i++){
@@ -511,11 +506,11 @@ static void updateInput(){
 	}
 
 	//Spawn a volcano
-	for(int y = 20; y < 25; y++)
+	for(int y = map.h/2-1; y < map.h/2+1; y++)
 	{
-		for(int x = 100; x < 105; x++)
+		for(int x = map.w/2-10; x < map.w/2+10; x++)
 		{
-			map.lava[(x) + (y) * map.w].depth += 1.0f;
+			// map.lava[(x) + (y) * map.w].depth += 1.0f;
 		}
 	}
 
@@ -675,9 +670,10 @@ static void generateShadowMap()
 
 	//		Calculate shadows by iterating over map diagonally like example below.
 	//		------- Save the highest tileheight in diagonal and decrease by 1 each step.
-	//		|1|2|4| If current tile is higher, save that one as new highest point.
-	//		|3|5|7| If not then that tile is in shadow.
-	//		|6|8|9|
+	//		|1|2|4|7| If current tile is higher, save that one as new highest point.
+	//		|3|5|8|B| If not then that tile is in shadow.
+	//		|6|9|C|E|
+	//      |A|D|F|G|
 	//		------- ONLY WORKS ON SQUARE MAPS!!!
 	//
 	int diagonalLines = (mapW + mapH) - 1;	// number of diagonal lines in map
@@ -699,6 +695,12 @@ static void generateShadowMap()
 			// X and Y start values needs to follow the upper edge and then go down the right edge of the map
 			int y = item + (diagonal > mapW ? diagonal - mapW : 0);
 			int x = ((diagonal > mapW) ? mapW - 1 : diagonal - 1) - item;
+
+			// TODO: Find a way to calulate start and end values so we don't need to check if x and y are in bounds
+			if(x == 0 || y == 0 || x == mapW - 1 || y == mapH - 1)
+			{
+				continue; // Skip the edges of the map
+			}
 
 			terrainPeakHeight -= sunAngleY;
 			if (terrainPeakHeight > map.height[x + y * mapW])
@@ -1310,8 +1312,8 @@ static void simulation(float dTime)
 		map.mist[x + (h - 4) * w].up = 0.f;
 	}
 
-    for(int y=0;y<h;y++){
-        for(int x=0;x<w;x++){
+    for(int y=1;y<h-1;y++){
+        for(int x=1;x<w-1;x++){
             // calculate velocity
             map.waterVel[x + y * w].x = (map.water[(x - 1) + (y)*w].right - map.water[(x) + (y)*w].left + map.water[(x) + (y)*w].right - map.water[(x + 1) + (y)*w].left); // X
             map.waterVel[x + y * w].y = (map.water[(x) + (y - 1)*w].down - map.water[(x) + (y)*w].up + map.water[(x) + (y)*w].down - map.water[(x) + (y + 1)*w].up);       // Y
@@ -1479,6 +1481,18 @@ static void init()
 
 	drawBackground(backgroundLayer);
 
+
+	// Init droplets to random positions within a 3d box
+	for(int i = 0; i < droplets.max; i++){
+		droplets.active[i] = 1;
+		droplets.array[i].pos.x = rand() % map.w;
+		droplets.array[i].pos.y = rand() % map.h;
+		droplets.array[i].pos.z = rand() % 100;
+		droplets.array[i].vel.x = 0.f;//rand() % 10 - 10.f;
+		droplets.array[i].vel.y = 0.f;//rand() % 10 - 10.f;
+		droplets.array[i].vel.z = 0.f;//rand() % 10 - 10.f;
+	}
+
 }
 
 
@@ -1500,6 +1514,85 @@ void process(){
 	}
 
 
+}
+
+
+void renderDroplets(Layer layer, Droplets* droplets, camera_t cam)
+{
+	clearLayer(layer);
+
+	for(int i = 0; i < droplets->max; i++){
+		if(droplets->active[i]){
+			Droplet droplet = droplets->array[i];
+			vec2f_t sPos = world2screen3D(droplet.pos.x,droplet.pos.y, droplet.pos.z, cam);
+			if(sPos.x >= layer.w || sPos.x < 0 || sPos.y >= layer.h || sPos.y < 0){
+				continue;
+			}
+			argb_t color = (argb_t){255, 255, 255, 50};
+			// drawPoint(layer, sPos.x, sPos.y, color);
+			layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].r = color.r ;//clampi(layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].r + color.r, 0, 255);
+			layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].g = color.g ;//clampi(layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].g + color.g, 0, 255);
+			layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].b = color.b ;//clampi(layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].b + color.b, 0, 255);
+			layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].a = clampi(layer.frameBuffer[(int)sPos.x + (int)sPos.y * layer.w].a + color.a, 0, 255);
+
+		}
+	}
+}
+
+void updateDroplets(Droplets* droplets, float dTime)
+{
+	for(int i = 0; i < droplets->max; i++){
+		if(droplets->active[i]){
+			Droplet* droplet = &droplets->array[i];
+			
+			// Update droplet velocities
+			droplet->vel.z -= 9.81f * dTime;
+
+			// Update droplet positions
+			droplet->pos.x += droplet->vel.x * dTime;
+			droplet->pos.y += droplet->vel.y * dTime;
+			droplet->pos.z += droplet->vel.z * dTime;
+			
+			// Handle collosion with the ground and edges
+			if(droplet->pos.z < map.height[(int)droplet->pos.x + (int)droplet->pos.y * map.w]){
+				// Reset droplet position
+				droplet->pos.z = map.height[(int)droplet->pos.x + (int)droplet->pos.y * map.w];
+				droplet->vel.z = -droplet->vel.z * 0.5f;
+
+				// Apply gradient to droplet velocity
+				vec2f_t gradient;
+				gradient.x = map.height[(int)droplet->pos.x - 1 + (int)droplet->pos.y * map.w] - map.height[(int)droplet->pos.x + 1 + (int)droplet->pos.y * map.w];
+				gradient.y = map.height[(int)droplet->pos.x + ((int)droplet->pos.y - 1) * map.w] - map.height[(int)droplet->pos.x + ((int)droplet->pos.y + 1) * map.w];
+				droplet->vel.x += gradient.x * 0.9f;
+				droplet->vel.y += gradient.y * 0.9f;
+			}
+
+			droplet->vel.x *= 0.999f;
+			droplet->vel.y *= 0.999f;
+			droplet->vel.z *= 0.999f;
+
+			if(droplet->pos.x < 0)
+			{
+				droplet->pos.x = 0;
+				droplet->vel.x = -droplet->vel.x;
+			}
+			if(droplet->pos.x > map.w)
+			{
+				droplet->pos.x = map.w;
+				droplet->vel.x = -droplet->vel.x;
+			}
+			if(droplet->pos.y < 0)
+			{
+				droplet->pos.y = 0;
+				droplet->vel.y = -droplet->vel.y;
+			}
+			if(droplet->pos.y > map.h)
+			{
+				droplet->pos.y = map.h;
+				droplet->vel.y = -droplet->vel.y;
+			}
+		}
+	}
 }
 
 
@@ -1534,7 +1627,13 @@ static int mainLoop()
 
 	PROFILE(render(botLayer, &renderMapBuffer);)
 
-	drawUI(topLayer);
+	
+	// Render middle layer
+	// Render droplets
+	updateDroplets(&droplets, minf(window.time.dTime, 0.1f));
+	renderDroplets(midLayer, &droplets, g_cam);
+
+	drawUI(uiLayer);
 
 	return window_run();
 }
@@ -1546,10 +1645,12 @@ int main()
 	// Disable console buffering
 	setbuf(stdout, NULL);
 	setbuf(stderr, NULL);
-	system("CHCP 65001"); //Enable unicode characters in the terminal
+	#ifdef _WIN32
+		// Windows-specific code to enable UTF-8
+		system("CHCP 65001"); // Enable unicode characters in the terminal
+	#endif
 
 	//Print title and set window title
-	char titleString[200];
 	sprintf(window.title, "%s %d.%d.%d - %s %s\n", APP_NAME, APP_VER_MAJOR, APP_VER_MINOR, APP_VER_BUILD, __DATE__, __TIME__);
 	printf("%s", window.title);
 
@@ -1568,8 +1669,10 @@ int main()
 	backgroundLayer = window_createLayer();
 	// init bottom layer
 	botLayer = window_createLayer();
+	// init middle layer
+	midLayer = window_createLayer();
 	// init top layer
-	topLayer = window_createLayer();
+	uiLayer = window_createLayer();
 	
 
 	

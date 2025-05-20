@@ -8,6 +8,7 @@
 // #include <avxintrin.h>
 
 #include "window.h"
+#include "globals.h"
 
 
 

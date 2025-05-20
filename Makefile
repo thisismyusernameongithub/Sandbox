@@ -2,7 +2,7 @@
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
 APP_VER_MINOR = 12
-APP_VER_BUILD = 2554
+APP_VER_BUILD = 2742
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
 
@@ -11,29 +11,38 @@ SRCDIR = src
 DEPDIR = dependencies/src
 BUILDDIR = build
 
+# Compiler settings
+CC = clang
 
 # Compiler flags etc.
 CFLAGS = -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-parameter
-LFLAGS = -L.\dependencies\lib -lgdi32 -lSDL2 -lSDL2_ttf -lm -lSDL2_image
+LFLAGS =  -lSDL2 -lSDL2_ttf -lm -lSDL2_image # -lgdi32 
 
 
 # Uncomment the following block to enable a full set of Clang sanitizers
 ifeq ($(OS),Windows_NT)
-	# On Windows, no sanitizer
+# On Windows, no sanitizer
 else
-	# On other platforms, enable a full set of sanitizers
-	SANITIZERS = address,undefined,thread,memory,leak,dataflow
-	CFLAGS += -fsanitize=$(SANITIZERS)
-	LFLAGS += -fsanitize=$(SANITIZERS)
+# On other platforms, enable a full set of sanitizers
+# Choose one of these combinations:
+	# SANITIZERS = address,undefined,leak  # For memory errors and leaks
+	# # SANITIZERS = thread,undefined       # For threading issues
+	# # SANITIZERS = memory,undefined -fsanitize-memory-track-origins=2      # For uninitialized reads
+	# CFLAGS += -fsanitize=$(SANITIZERS) 
+	# LFLAGS += -fsanitize=$(SANITIZERS)
+	
+	# # Sanitizer runtime options - these will be passed to the program when running
+	# SANITIZER_OPTIONS = ASAN_OPTIONS=halt_on_error=0
+	# UBSAN_OPTIONS = halt_on_error=0:print_stacktrace=1
 endif
 
 # Uncomment for Debugging
-LFLAGS += -Wl,--warn-common -Wl,--demangle
-CFLAGS += -g3 -D_FORTIFY_SOURCE=2 -fstack-clash-protection -fcf-protection=full -fno-omit-frame-pointer -fstack-protector-all
+# LFLAGS += -Wl,--warn-common -Wl,--demangle
+# CFLAGS += -g3 -D_FORTIFY_SOURCE=2 -fstack-clash-protection -fcf-protection=full -fno-omit-frame-pointer -fstack-protector-all
 
 # Uncomment for all optimizations
-# CFLAGS += -flto -O3 -ffast-math -funroll-loops -fno-stack-protector -fno-exceptions -g3
-# LFLAGS += -Wl,-O3,--strip-debug,--as-needed -flto -fuse-linker-plugin
+CFLAGS += -flto -O3 -ffast-math -funroll-loops -fno-stack-protector -fno-exceptions -g3
+LFLAGS += -Wl,-O3,--strip-debug,--as-needed -flto -fuse-linker-plugin
 
 EMSFLAGS = -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 \
             -sUSE_SDL_TTF=2 -sUSE_WEBGL2=1 -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sASSERTIONS -sGL_ASSERTIONS \
@@ -56,7 +65,7 @@ GLAD_EM_OBJ = $(BUILDDIR)/glad_em.o
 increment_version:
 	$(eval APP_VER_BUILD := $(shell echo $$(($(APP_VER_BUILD) + 1))))
 	@sed -i 's/^\(APP_VER_BUILD = \).*/\1$(APP_VER_BUILD)/' Makefile
-	$(shell touch src\application.c)
+	$(shell touch src/application.c)
 
 
 
@@ -68,31 +77,31 @@ increment_version:
 
 # For application.c – applying extra defines
 $(BUILDDIR)/application.o: $(SRCDIR)/application.c
-	gcc $(CFLAGS) -c $< -o $@ $(DEFINES)
+	$(CC) $(CFLAGS) -c $< -o $@ $(DEFINES)
 
 # For window.c – add extra flags (e.g. -mavx)
 $(BUILDDIR)/window.o: $(SRCDIR)/window.c
-	gcc $(CFLAGS) -mavx -c $< -o $@
+	$(CC) $(CFLAGS) -mavx -c $< -o $@
 
 # For simulation.c – default compile
 $(BUILDDIR)/simulation.o: $(SRCDIR)/simulation.c
-	gcc $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/terrainGeneration.o: $(SRCDIR)/terrainGeneration.c
-	gcc $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/camera.o: $(SRCDIR)/camera.c
-	gcc $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/globals.o: $(SRCDIR)/globals.c
-	gcc $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/render.o: $(SRCDIR)/render.c
-	gcc $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # Glad
 $(BUILDDIR)/glad.o: $(DEPDIR)/$(GLAD_SRC)
-	gcc $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 ###############################
 # Pattern rules for Emscripten build
@@ -135,7 +144,7 @@ all: application.exe emscripten
 
 # Native linking
 application.exe: increment_version $(NATIVE_OBJS) $(GLAD_OBJ)
-	gcc $(CFLAGS) -o $(BUILDDIR)/$(APP_NAME).exe $(NATIVE_OBJS) $(GLAD_OBJ) $(LFLAGS)
+	$(CC) $(CFLAGS) -o $(BUILDDIR)/$(APP_NAME).exe $(NATIVE_OBJS) $(GLAD_OBJ) $(LFLAGS)
 
 # Emscripten linking & packaging
 emscripten: $(EM_OBJS) $(GLAD_EM_OBJ)
@@ -143,8 +152,24 @@ emscripten: $(EM_OBJS) $(GLAD_EM_OBJ)
 
 # Shortcut to run native application
 run: application.exe
-	$(BUILDDIR)/$(APP_NAME).exe
+	$(SANITIZER_OPTIONS) $(UBSAN_OPTIONS) $(BUILDDIR)/$(APP_NAME).exe
 
 # Clean build artifacts
 clean:
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.exe gmon.out
+
+###############################
+# Valgrind testing targets
+###############################
+memcheck: application.exe
+	valgrind --tool=memcheck --leak-check=full --show-leak-kinds=definite,indirect,possible --track-origins=yes --suppressions=./valgrind-suppresions.txt $(BUILDDIR)/$(APP_NAME).exe 
+
+callgrind: application.exe
+	valgrind --tool=callgrind --callgrind-out-file=callgrind.out.%p $(BUILDDIR)/$(APP_NAME).exe
+	@echo "To view results: kcachegrind callgrind.out.*"
+
+cachegrind: application.exe
+	valgrind --tool=cachegrind --cachegrind-out-file=cachegrind.out.%p $(BUILDDIR)/$(APP_NAME).exe
+	@echo "To view results: kcachegrind cachegrind.out.*"
+
+.PHONY: memcheck callgrind cachegrind

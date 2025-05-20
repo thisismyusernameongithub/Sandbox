@@ -1,0 +1,170 @@
+{
+   nvidia_posix_memalign_0_size
+   Memcheck:Param
+   posix_memalign(size)
+   fun:posix_memalign
+   obj:/usr/lib/x86_64-linux-gnu/libnvidia-glcore.so.570.133.07
+   obj:/usr/lib/x86_64-linux-gnu/libGLX_nvidia.so.570.133.07
+}
+{
+   NVidia_Driver_Invalid_Size_Value_Exact
+   Memcheck:Param
+   posix_memalign(size)
+   fun:posix_memalign
+   obj:*/libnvidia-glcore.so.570.133.07
+   obj:*/libGLX_nvidia.so.570.133.07
+   obj:*/libGLX_nvidia.so.570.133.07
+   obj:*/libGLX_nvidia.so.570.133.07
+   fun:call_init
+   fun:_dl_init
+   fun:_dl_catch_exception
+   fun:dl_open_worker
+   fun:_dl_catch_exception
+   fun:_dl_open
+   fun:dlopen_doit
+   fun:_dl_catch_exception
+}
+
+# Add a more generic suppression as backup
+{
+   NVidia_Driver_Invalid_Size_Value_All
+   Memcheck:Param
+   posix_memalign(size)
+   fun:posix_memalign
+   ...
+   obj:*nvidia*
+   ...
+}
+{
+   NVidia_Driver_Memory_Leak_1
+   Memcheck:Leak
+   ...
+   obj:*/libnvidia-glcore.so*
+   ...
+}
+{
+   NVidia_Driver_Memory_Leak_2
+   Memcheck:Leak
+   ...
+   obj:*/libGLX_nvidia.so*
+   ...
+}
+
+# Add these new suppressions for uninitialized values
+{
+   NVidia_Driver_Uninit_Value_1
+   Memcheck:Cond
+   ...
+   obj:*/libnvidia-glcore.so*
+   ...
+}
+
+{
+   NVidia_Driver_Uninit_Value_2
+   Memcheck:Cond
+   ...
+   obj:*/libGLX_nvidia.so*
+   ...
+}
+
+{
+   NVidia_Driver_Uninit_Value_3
+   Memcheck:Value8
+   ...
+   obj:*/libnvidia-glcore.so*
+   ...
+}
+
+{
+   NVidia_Driver_Invalid_posix_memalign
+   Memcheck:Param
+   posix_memalign(alignment)
+   ...
+   obj:*/libnvidia-glcore.so*
+   ...
+}
+
+{
+   NVidia_Driver_Invalid_posix_memalign_2
+   Memcheck:Param
+   posix_memalign(size)
+   ...
+   obj:*/libnvidia-glcore.so*
+   ...
+}
+
+{
+   NVidia_Driver_Invalid_posix_memalign_3
+   Memcheck:Value8
+   fun:posix_memalign
+   ...
+   obj:*/libnvidia-glcore.so*
+   ...
+}
+{
+   NVidia_Driver_Invalid_Size_Value
+   Memcheck:Param
+   posix_memalign(size)
+   fun:posix_memalign
+   obj:*/libnvidia-glcore.so*
+   obj:*/libGLX_nvidia.so*
+}
+
+{
+   NVidia_Driver_Invalid_Size_Value_General
+   Memcheck:Param
+   malloc(size)
+   ...
+   obj:*/libnvidia-glcore.so*
+   ...
+}
+
+# X11 suppressions
+{
+   X11_xcb_leak
+   Memcheck:Leak
+   ...
+   obj:*/libxcb.so*
+   ...
+}
+{
+   X11_libX11_leak
+   Memcheck:Leak
+   ...
+   obj:*/libX11.so*
+   ...
+}
+
+# SDL suppressions
+{
+   SDL2_leak
+   Memcheck:Leak
+   ...
+   obj:*/libSDL2-2.0.so*
+   ...
+}
+
+# OpenGL suppressions
+{
+   GL_leak
+   Memcheck:Leak
+   ...
+   obj:*/libGL.so*
+   ...
+}
+
+# Still reachable suppressions
+{
+   Still_reachable_malloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   ...
+}
+{
+   Still_reachable_calloc
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   ...
+}

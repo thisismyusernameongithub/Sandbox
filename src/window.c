@@ -437,6 +437,7 @@ Window* window_init()
     // Calculate a reasonable size: header + uniform declarations + main function + sampling + blending
     const int bufferSize = 1024 + MAX_TEXTURES * 128;
     char* fragmentShaderSource = (char*)malloc(bufferSize);
+	
     
     // Write shader header
     int offset = sprintf(fragmentShaderSource,
@@ -498,6 +499,8 @@ Window* window_init()
         errLog("Shader compilation failed\n%s\n", infoLog);
 		return 0;
     }
+
+	free(fragmentShaderSource);
 
 
     //Compile program
@@ -1470,23 +1473,22 @@ char* readShaderSource(const char* filePath) {
     int fileLength = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-	// Allocate memory for the shader source code
-    char* buffer = (char*)calloc(fileLength, sizeof(char));
+    // Allocate memory for the shader source code (+1 for null terminator)
+    char* buffer = (char*)calloc(fileLength + 1, sizeof(char));
     if (!buffer) {
         errLog("Failed to allocate memory for shader source\n");
-		return NULL;
+        fclose(file);
+        return NULL;
     }
 
     //Read file to buffer
-    char chr;
-    int len = 0;
-    do{
-        chr = fgetc(file);
-        buffer[len++] = chr;
-    }while(chr != EOF);
-
+    size_t bytesRead = fread(buffer, 1, fileLength, file);
+    if (bytesRead < (size_t)fileLength) {
+        errLog("Warning: could only read %zu bytes of %d\n", bytesRead, fileLength);
+    }
+    
     //Add null termination to buffer for use as c string
-    buffer[len-1] = '\0';
+    buffer[bytesRead] = '\0';
 
     fclose(file);
     return buffer;

@@ -55,7 +55,8 @@
         "iterator": "c",
         "string_view": "c",
         "thread": "c",
-        "unordered_map": "c"
+        "unordered_map": "c",
+        "tgmath.h": "c"
     },
     "cmake.configureOnOpen": true,
     "makefile.launchConfigurations": [

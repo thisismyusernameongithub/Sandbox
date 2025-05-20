@@ -22,3 +22,8 @@ Pallete pallete = {
 	.lavaBright   = rgb(254, 162, 3)
 };
 // https://coolors.co/406063-4c8a85-93bda8-baa588-ebe9ec-d2d2d2-3d3533-fe3e0a-fea203
+
+
+Droplets droplets = {
+        .max = DROPLET_MAX
+    };
