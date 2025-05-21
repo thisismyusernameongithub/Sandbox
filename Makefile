@@ -2,7 +2,7 @@
 APP_NAME = Sandbox
 APP_VER_MAJOR = 0
 APP_VER_MINOR = 12
-APP_VER_BUILD = 2746
+APP_VER_BUILD = 2762
 
 DEFINES = -DAPP_NAME=\"$(APP_NAME)\" -DAPP_VER_MAJOR=$(APP_VER_MAJOR) -DAPP_VER_MINOR=$(APP_VER_MINOR) -DAPP_VER_BUILD=$(APP_VER_BUILD)
 
@@ -15,7 +15,7 @@ BUILDDIR = build
 CC = clang
 
 # Compiler flags etc.
-CFLAGS = -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-parameter
+CFLAGS = -Wall -Wextra -Wno-unused-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-unused-parameter -mavx 
 LFLAGS =  -lSDL2 -lSDL2_ttf -lm -lSDL2_image # -lgdi32 
 
 
@@ -41,16 +41,18 @@ endif
 # CFLAGS += -g3 -D_FORTIFY_SOURCE=2 -fstack-clash-protection -fcf-protection=full -fno-omit-frame-pointer -fstack-protector-all
 
 # Uncomment for all optimizations
-CFLAGS += -flto -O3 -ffast-math -funroll-loops -fno-stack-protector -fno-exceptions -g3
-LFLAGS += -Wl,-O3,--strip-debug,--as-needed -flto -fuse-linker-plugin
+CFLAGS += -O3 -ffast-math -funroll-loops -fno-stack-protector -fno-exceptions -g3 #-flto 
+LFLAGS += -Wl,-O3,--strip-debug,--as-needed #-flto -fuse-linker-plugin
 
 EMSFLAGS = -sEXPORTED_RUNTIME_METHODS=cwrap -sTOTAL_MEMORY=536870912 -sUSE_SDL=2 -sUSE_SDL_IMAGE=2 \
             -sUSE_SDL_TTF=2 -sUSE_WEBGL2=1 -sFULL_ES3=1 -sMAX_WEBGL_VERSION=2 -sASSERTIONS -sGL_ASSERTIONS \
             -sSTACK_SIZE=1048576 --emrun
 
-# Source files for native build (update these lists to add new files)
-NATIVE_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c globals.c render.c
+# Get all source and object files
+NATIVE_SRCS = $(notdir $(wildcard $(SRCDIR)/*.c))
 NATIVE_OBJS = $(patsubst %.c,$(BUILDDIR)/%.o,$(NATIVE_SRCS))
+DEP_SRCS = $(notdir $(wildcard $(DEPDIR)/*.c))
+DEP_OBJS = $(patsubst %.c,$(BUILDDIR)/%.o,$(DEP_SRCS))
 
 # Source files for Emscripten build
 EM_SRCS = application.c window.c simulation.c terrainGeneration.c camera.c globals.c render.c
@@ -58,7 +60,7 @@ EM_OBJS = $(patsubst %.c,$(BUILDDIR)/%_em.o,$(EM_SRCS))
 
 # Glad object files (common for both builds)
 GLAD_SRC = glad.c
-GLAD_OBJ  = $(BUILDDIR)/glad.o
+# GLAD_OBJ  = $(BUILDDIR)/glad.o
 GLAD_EM_OBJ = $(BUILDDIR)/glad_em.o
 
 # Increment APP_VER_BUILD number by 1
@@ -75,33 +77,43 @@ increment_version:
 
 # clang -target x86_64-pc-windows-gnu
 
-# For application.c – applying extra defines
-$(BUILDDIR)/application.o: $(SRCDIR)/application.c
-	$(CC) $(CFLAGS) -c $< -o $@ $(DEFINES)
-
-# For window.c – add extra flags (e.g. -mavx)
-$(BUILDDIR)/window.o: $(SRCDIR)/window.c
-	$(CC) $(CFLAGS) -mavx -c $< -o $@
-
-# For simulation.c – default compile
-$(BUILDDIR)/simulation.o: $(SRCDIR)/simulation.c
+# Compile source files
+$(BUILDDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/terrainGeneration.o: $(SRCDIR)/terrainGeneration.c
+# Compile dependencies
+$(BUILDDIR)/%.o: $(DEPDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/camera.o: $(SRCDIR)/camera.c
-	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/globals.o: $(SRCDIR)/globals.c
-	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/render.o: $(SRCDIR)/render.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# # For application.c – applying extra defines
+# $(BUILDDIR)/application.o: $(SRCDIR)/application.c
+# 	$(CC) $(CFLAGS) -c $< -o $@ $(DEFINES)
+
+# # For window.c – add extra flags (e.g. -mavx)
+# $(BUILDDIR)/window.o: $(SRCDIR)/window.c
+# 	$(CC) $(CFLAGS) -c $< -o $@
+
+# # For simulation.c – default compile
+# $(BUILDDIR)/simulation.o: $(SRCDIR)/simulation.c
+# 	$(CC) $(CFLAGS) -c $< -o $@
+
+# $(BUILDDIR)/terrainGeneration.o: $(SRCDIR)/terrainGeneration.c
+# 	$(CC) $(CFLAGS) -c $< -o $@
+
+# $(BUILDDIR)/camera.o: $(SRCDIR)/camera.c
+# 	$(CC) $(CFLAGS) -c $< -o $@
+
+# $(BUILDDIR)/globals.o: $(SRCDIR)/globals.c
+# 	$(CC) $(CFLAGS) -c $< -o $@
+
+# $(BUILDDIR)/render.o: $(SRCDIR)/render.c
+# 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Glad
-$(BUILDDIR)/glad.o: $(DEPDIR)/$(GLAD_SRC)
-	$(CC) $(CFLAGS) -c $< -o $@
+# $(BUILDDIR)/glad.o: $(DEPDIR)/$(GLAD_SRC)
+# 	$(CC) $(CFLAGS) -c $< -o $@
 
 ###############################
 # Pattern rules for Emscripten build
@@ -143,8 +155,8 @@ $(BUILDDIR)/glad_em.o: $(DEPDIR)/$(GLAD_SRC)
 all: application.exe emscripten
 
 # Native linking
-application.exe: increment_version $(NATIVE_OBJS) $(GLAD_OBJ)
-	$(CC) $(CFLAGS) -o $(BUILDDIR)/$(APP_NAME).exe $(NATIVE_OBJS) $(GLAD_OBJ) $(LFLAGS)
+application.exe: increment_version $(NATIVE_OBJS) $(DEP_OBJS) #$(GLAD_OBJ)
+	$(CC) $(CFLAGS) -o $(BUILDDIR)/$(APP_NAME).exe $(NATIVE_OBJS) $(DEP_OBJS) $(LFLAGS)
 
 # Emscripten linking & packaging
 emscripten: $(EM_OBJS) $(GLAD_EM_OBJ)

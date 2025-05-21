@@ -4,6 +4,7 @@
 #include <stdint.h> //Types
 #include <stdio.h> //sprintf()
 #include <string.h> //memcpy()
+#include <stdbool.h> //bool
 
 
 #define PROFILE_MAX_NAME (100) //Max length of a profile name
